@@ -1,0 +1,210 @@
+% M2_NnaemekaNnachiEgwu.tex
+% Milestone 2: Scientific Contextualization and Tradeoff Analysis
+% Real-Time Systems Seminar, HSHL, Prof. Dr. Stefan Henkler
+% Author: Nnaemeka Nnachi-Egwu
+%
+% Structured notes format per seminar checklist. Not publication prose.
+
+\documentclass[conference,onecolumn]{IEEEtran}
+\usepackage{amsmath, amssymb, booktabs, array, microtype, url}
+
+\begin{document}
+
+\title{Milestone 2: Scientific Contextualization\\
+  {\large Priority Inheritance Protocol (Resource Access Protocols)}}
+
+\author{\IEEEauthorblockN{Nnaemeka Nnachi-Egwu}
+\IEEEauthorblockA{Electronic Engineering\\
+Hochschule Hamm-Lippstadt\\
+Lippstadt, Germany\\
+nnaemeka.nnachi-egwu@stud.hshl.de}}
+
+\maketitle
+
+%---------------------------------------------------------------
+\section{Protocol Landscape and Chronology}
+
+\textbf{Chronological development} (Buttazzo \S7.1 overview):
+\begin{enumerate}
+  \item \textbf{NPP} (Non-Preemptive Protocol): classical; no cited inventor.
+        Task runs non-preemptively inside CS. Simple, over-blocks.
+  \item \textbf{HLP/IPC} (Highest Locker Priority): classical.
+        Raises priority at entry time to ceiling of entered semaphore.
+        Requires ceiling declarations in code.
+  \item \textbf{PIP} + \textbf{PCP}: Sha, Rajkumar, Lehoczky [SRL90],
+        IEEE Trans.\ Computers 39(9):1175--1185, 1990.
+        \emph{Same paper, two protocols}: PIP (§7.6) and PCP (§7.7)
+        as a design progression.
+  \item \textbf{SRP}: Baker [Bak91], Real-Time Systems 3(1):67--99, 1991.
+        Extends PCP: multi-unit resources, EDF, stack sharing.
+\end{enumerate}
+
+\textbf{Conceptual positions:}
+\begin{itemize}
+  \item NPP/HLP block at \emph{activation time} (before CS entry). Pessimistic.
+  \item PIP defers blocking to \emph{access time} (at \texttt{pi\_wait}).
+        No blocking unless actual contention. Less pessimistic.
+  \item PCP adds lock-grant rule on top of PIP:
+        prevents deadlock and chained blocking. Non-transparent.
+  \item SRP blocks at \emph{preemption time} (like NPP/HLP) but with
+        tighter dynamic ceilings; allows EDF and stack sharing.
+\end{itemize}
+
+%---------------------------------------------------------------
+\section{Where PIP Sits Relative to Alternatives}
+
+\textbf{PIP vs.\ NPP:}
+NPP blocks all higher-priority tasks whenever \emph{any} CS is entered,
+even when those tasks share no resource with the CS task.
+PIP blocks only tasks that actually contend for the same semaphore.
+More selective, less pessimistic.
+
+\textbf{PIP vs.\ HLP:}
+HLP blocks a task at \emph{activation time} based on ceiling of semaphore
+being entered --- even if the branch accessing the resource is never taken
+at runtime (conditional-CS pessimism, Buttazzo p.~214).
+PIP defers to actual \texttt{wait} call. Removes conditional-branch pessimism.
+However, HLP gives single blocking (Theorem~7.1) vs.\ PIP's $\alpha_i$
+blockings (Theorem~7.2) --- HLP can be \emph{less} blocking in worst case.
+
+\textbf{PIP vs.\ PCP:}
+
+{\small\begin{tabular}{@{}lcc@{}}
+\toprule
+Property & PIP & PCP \\
+\midrule
+Deadlock-free & \textbf{No} & Yes (Thm~7.3) \\
+Chained blocking & \textbf{Possible} & No (Thm~7.4) \\
+Transparent & Yes & \textbf{No} \\
+Max blockings & $\alpha_i = \min(l_i,s_i)$ & 1 \\
+Blocking time & Tighter (actual contention) & Pessimistic (ceiling rule) \\
+Impl.\ effort & Hard & Medium \\
+\bottomrule
+\end{tabular}}
+
+\textbf{PIP vs.\ SRP (Baker [Bak91]):}
+SRP extends PCP with: (1) multi-unit resources, (2) EDF support via
+preemption levels, (3) runtime stack sharing (up to 90\% savings,
+Buttazzo \S7.8.5). PIP is fixed-priority, single-unit, no stack sharing.
+
+%---------------------------------------------------------------
+\section{Kopetz: Priority Inversion as Correctness Failure}
+
+\textbf{Kopetz definition (RTS slide 7):}
+``A real-time computer system is one in which correctness depends
+not only on logical results but also on the \emph{physical instant}
+at which they are produced.''
+
+\textbf{Implication:}
+In the Fig.~7.4 scenario, $\tau_1$ has highest priority because its
+deadline is tightest. If $\tau_1$ misses its deadline due to unbounded
+inversion, the physical instant of its output is wrong --- not just late.
+This is a system failure by definition, not a QoS degradation.
+
+\textbf{Slide 13 (Prof.\ Henkler):} ``Real-time means predictable;
+result after deadline is wrong, not just late.''
+
+\textbf{Slide 48:} EDF optimal \emph{only without resource competition.}
+PIP (or equivalent) is necessary to restore theoretical scheduling
+guarantees in the presence of shared resources.
+
+%---------------------------------------------------------------
+\section{Application Domains}
+
+\textbf{POSIX (\texttt{PTHREAD\_PRIO\_INHERIT}):}
+\begin{itemize}
+  \item POSIX.1-2008 standardises \texttt{pthread\_mutexattr\_setprotocol}
+        with \texttt{PTHREAD\_PRIO\_INHERIT}.
+  \item One attribute change at mutex creation; zero changes to lock/unlock sites.
+  \item Supported: Linux (with RT patch / kernel $\geq$2.6.25), VxWorks, QNX.
+  \item \textbf{Mars Pathfinder (1997):} VxWorks mutex without priority
+        inheritance caused IPC bus watchdog resets. Fix: enable
+        \texttt{PTHREAD\_PRIO\_INHERIT} on the meteorological bus mutex.
+        One config change, no code rewrite.
+\end{itemize}
+
+\textbf{Automotive OSEK/AUTOSAR:}
+\begin{itemize}
+  \item OSEK OS default: ceiling protocol (HLP/IPC variant), not PIP.
+  \item Some AUTOSAR vendor extensions and POSIX-compliant RTOS layers
+        provide PIP-like inheritance (\textbf{qualified claim}: not a
+        universal AUTOSAR requirement).
+  \item ISO~26262 (ASIL): bounded blocking time required for safety
+        qualification. PIP's $B_i$ bound + RTA provides this.
+\end{itemize}
+
+%---------------------------------------------------------------
+\section{Where PIP Is Insufficient}
+
+\textbf{Multiprocessor systems:}
+\begin{itemize}
+  \item Ch.~7 explicitly uniprocessor (\S7.3, p.~209).
+  \item Boosting a holder's priority on a different processor requires
+        inter-processor interrupt (IPI) with non-deterministic latency.
+  \item Gracioli et~al.\ [GP] measure IPI overhead ($\Delta_\mathrm{ipi}$),
+        cache affinity loss, scheduling overhead on actual hardware ---
+        none appear in Buttazzo's $B_i$ formula.
+  \item \textbf{Consequence:} PIP semantics cannot be directly applied
+        on multiprocessors; MPCP / FMLP / MSRP needed.
+\end{itemize}
+
+\textbf{Distributed systems:}
+Resource access becomes message-passing; priority inheritance requires
+network communication; timing is non-deterministic. Kopetz [Ko] discusses
+distributed timing constraints; PIP provides no help here.
+
+\textbf{EDF scheduling:}
+PIP defined for fixed priorities. For EDF systems, SRP [Bak91]
+is the standard protocol (handles dynamic priorities via preemption levels).
+
+%---------------------------------------------------------------
+\section{Scientific and Engineering Tradeoffs}
+
+{\small\begin{tabular}{@{}lp{5cm}p{4.5cm}@{}}
+\toprule
+Tradeoff & PIP advantage & PIP disadvantage \\
+\midrule
+Pessimism vs.\ correctness & Lower pessimism: blocks only on genuine contention & Multiple blockings ($\alpha_i$) vs.\ single blocking in HLP/PCP \\
+Transparency vs.\ safety & No code change needed; legacy-friendly & Dynamic inheritance hard to audit statically; limits formal certification \\
+Simplicity vs.\ completeness & No deadlock risk from protocol itself & Programmer must enforce total semaphore ordering \\
+Generality vs.\ scope & Works for any fixed-priority RTOS & Uniprocessor only; no EDF support \\
+\bottomrule
+\end{tabular}}
+
+%---------------------------------------------------------------
+\section{Reference Justifications}
+
+\textbf{Buttazzo 2011:} Primary source. Provides all formal
+definitions, lemmas, theorems, algorithms, and the five-protocol
+comparison.
+
+\textbf{Sha, Rajkumar, Lehoczky 1990:} Original PIP/PCP paper
+[SRL90]. Required to cite original authors of Theorem~7.2 and
+PCP results.
+
+\textbf{Kopetz 2011:} Grounding definition for real-time correctness
+(physical instant, slide 7). Establishes why inversion is a
+correctness failure, not a performance issue.
+
+\textbf{Abella et~al.\ 2015:} WCET estimation limits. Contextualises
+the assumption that $\delta_{i,k}$ values are exactly known.
+None of the surveyed WCET methods is fully trustworthy.
+
+\textbf{Gracioli et~al.\ 2013:} Multiprocessor OS overhead. Grounds
+PIP's scope limitation with measured data from real hardware.
+
+\textbf{Baker 1991:} SRP origin [Bak91]. Required for protocol
+landscape (Table~7.5 SRP row) and distinguishing EDF-capable protocols.
+
+\textbf{Behrmann et~al.\ 2004:} UPPAAL tutorial. Needed for M4
+UPPAAL implementation and verification methodology.
+
+\textbf{Excluded references (with justification):}
+\begin{itemize}
+  \item General scheduling textbooks (not PIP-specific; Buttazzo covers scope).
+  \item AUTOSAR specifications (not publicly available; claim qualified instead).
+  \item POSIX.1-2008 standard (too broad; PTHREAD\_PRIO\_INHERIT is a
+        well-known fact, not requiring a primary citation in a 5-page paper).
+\end{itemize}
+
+\end{document}
