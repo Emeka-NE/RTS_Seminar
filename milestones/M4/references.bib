@@ -1,0 +1,103 @@
+% references.bib — M4 Final Paper Bibliography
+% Priority Inheritance Protocol — Seminar Paper
+% Nnaemeka Nnachi-Egwu, Hochschule Hamm-Lippstadt
+%
+% ANNOTATION NOTES (for student reference management per seminar instructions,
+% slide 2: "write for each related reference a short note of how it is related"):
+% Stored as comments here to avoid rendering in the bibliography output.
+%
+% [Buttazzo2011] PRIMARY SOURCE. Chapter 7 (pp.205-249). All formal definitions,
+%   lemmas, theorems, blocking formulas, and protocol comparison (Table 7.5).
+% [Sha1990]      ORIGINAL PIP/PCP PAPER [SRL90]. Both PIP (§7.6) and PCP (§7.7)
+%   introduced here. Theorem 7.2 and Lemmas 7.1-7.5 are due to these authors.
+% [Kopetz2011]   REAL-TIME DEFINITION (physical instant). Course slides slide 7.
+%   Grounds priority inversion as correctness failure, not performance issue.
+% [Abella2015]   WCET TRUSTWORTHINESS. Buttazzo's B_i formula assumes exact
+%   delta_{j,k} values; this paper shows WCET estimation is itself unreliable.
+% [Gracioli2013] MULTIPROCESSOR SCOPE. Measures real OS overhead (IPI latency,
+%   cache loss) missing from Buttazzo's uniprocessor B_i formula.
+% [Behrmann2004] UPPAAL TUTORIAL. Timed automata syntax, guard/invariant/
+%   sync/assignment labels, query language (A[], E<>). Used for pip_model.xml.
+% [Baker1991]    SRP ORIGIN [Bak91]. Multi-unit resources, EDF, stack sharing.
+%   Table 7.5 SRP row; distinguishes EDF-capable protocols from PIP.
+
+@book{Buttazzo2011,
+  author    = {Giorgio C. Buttazzo},
+  title     = {Hard Real-Time Computing Systems: Predictable Scheduling
+               Algorithms and Applications},
+  edition   = {3},
+  publisher = {Springer},
+  year      = {2011},
+  isbn      = {978-1-4614-0676-1}
+}
+
+@article{Sha1990,
+  author  = {Lui Sha and Ragunathan Rajkumar and John P. Lehoczky},
+  title   = {Priority Inheritance Protocols: An Approach to Real-Time
+             Synchronization},
+  journal = {IEEE Transactions on Computers},
+  volume  = {39},
+  number  = {9},
+  pages   = {1175--1185},
+  year    = {1990},
+  doi     = {10.1109/12.57058}
+}
+
+@book{Kopetz2011,
+  author    = {Hermann Kopetz},
+  title     = {Real-Time Systems: Design Principles for Distributed Embedded
+               Applications},
+  edition   = {2},
+  publisher = {Springer},
+  year      = {2011},
+  isbn      = {978-1-4419-8236-0}
+}
+
+@inproceedings{Abella2015,
+  author    = {Jaume Abella and Carles Hernandez and Eduardo Qui{\~n}ones
+               and Francisco J. Cazorla and Philippa Ryan Conmy and
+               Mikel Azkarate-askasua and Jon Perez and Enrico Mezzetti
+               and Tullio Vardanega},
+  title     = {{WCET} Analysis Methods: Pitfalls and Challenges on
+               Their Trustworthiness},
+  booktitle = {Proceedings of the 10th IEEE International Symposium on
+               Industrial Embedded Systems (SIES 2015)},
+  year      = {2015},
+  doi       = {10.1109/SIES.2015.7185049}
+}
+
+@article{Gracioli2013,
+  author  = {Giovani Gracioli and Ant{\^o}nio Augusto Fr{\"o}hlich and
+             Rodolfo Pellizzoni and Sebastian Fischmeister},
+  title   = {Implementation and Evaluation of Global and Partitioned
+             Scheduling in a Real-Time {OS}},
+  journal = {Real-Time Systems},
+  volume  = {49},
+  number  = {5},
+  pages   = {669--714},
+  year    = {2013},
+  doi     = {10.1007/s11241-013-9183-3}
+}
+
+@inproceedings{Behrmann2004,
+  author    = {Gerd Behrmann and Alexandre David and Kim G. Larsen},
+  title     = {A Tutorial on {U}ppaal},
+  booktitle = {Formal Methods for the Design of Real-Time Systems (SFM-RT 2004)},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {3185},
+  pages     = {200--236},
+  publisher = {Springer},
+  year      = {2004},
+  doi       = {10.1007/978-3-540-30080-9_7}
+}
+
+@article{Baker1991,
+  author  = {Theodore P. Baker},
+  title   = {Stack-Based Scheduling of Realtime Processes},
+  journal = {Real-Time Systems},
+  volume  = {3},
+  number  = {1},
+  pages   = {67--99},
+  year    = {1991},
+  doi     = {10.1007/BF00365393}
+}

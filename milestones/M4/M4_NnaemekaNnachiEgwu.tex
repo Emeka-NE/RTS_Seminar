@@ -1,0 +1,595 @@
+% M4_NnaemekaNnachiEgwu.tex
+% Priority Inheritance Protocol — Seminar Paper
+% Real-Time Systems Seminar, HSHL, Prof. Dr. Stefan Henkler
+% Author: Nnaemeka Nnachi-Egwu
+% IEEE conference format, target 5 pages
+
+\documentclass[conference]{IEEEtran}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{url}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{cite}
+
+\hyphenation{Sched-ul-a-bil-i-ty}
+
+\begin{document}
+
+\title{Priority Inheritance Protocol for Real-Time Resource Synchronization}
+
+\author{\IEEEauthorblockN{Nnaemeka Nnachi-Egwu}
+\IEEEauthorblockA{Electronic Engineering\\
+Hochschule Hamm-Lippstadt\\
+Lippstadt, Germany\\
+nnaemeka.nnachi-egwu@stud.hshl.de}}
+
+\maketitle
+
+%---------------------------------------------------------------
+\begin{abstract}
+Shared resources in real-time systems create the priority inversion
+problem: a high-priority task can be blocked by a lower-priority task
+for an unbounded duration, invalidating schedulability guarantees.
+The Priority Inheritance Protocol (PIP), introduced by Sha, Rajkumar,
+and Lehoczky~\cite{Sha1990}, addresses this by dynamically boosting a
+resource holder's priority to match that of any blocked task.
+This paper presents PIP's formal model, its bounded-inversion
+guarantee (Theorem~7.2~\cite{Buttazzo2011}), and its limitations
+(deadlock susceptibility, chained blocking). A verified UPPAAL model
+and C\texttt{++} simulator demonstrate the protocol's behaviour on a
+canonical three-task example. The schedulability analysis uses both
+the Liu-Layland utilization test and Response-Time Analysis with
+blocking terms. PIP is evaluated against four alternative protocols
+and its applicability to embedded systems contexts is assessed.
+\end{abstract}
+
+\begin{IEEEkeywords}
+priority inversion, priority inheritance, real-time scheduling,
+resource access protocols, semaphores, UPPAAL, schedulability analysis
+\end{IEEEkeywords}
+
+%---------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+A real-time computer system is one in which the correctness of
+behaviour depends not only on the logical results of computation but
+also on the \emph{physical instant} at which those results are
+produced~\cite{Kopetz2011}.
+In this model, a result delivered after its deadline is not merely late;
+it is logically incorrect.
+Real-time systems must therefore provide timing guarantees under all
+operating conditions, including worst-case resource contention.
+
+Shared exclusive resources introduce the \emph{priority inversion}
+problem: a high-priority task can be blocked waiting for a resource
+held by a lower-priority task, while medium-priority tasks are free
+to run, extending the blockage without bound~\cite{Buttazzo2011}.
+This violates the guarantee on which rate-monotonic and earliest-deadline-first
+scheduling theory is built; the Earliest Deadline First algorithm is
+optimal only when there is no resource competition~\cite{Kopetz2011}.
+
+The Priority Inheritance Protocol (PIP)~\cite{Sha1990} bounds this
+inversion by letting a resource holder temporarily inherit the priority
+of any task it blocks.
+This paper explains PIP's design rationale, formal properties, practical
+limitations, and its place among the five standard resource access protocols
+in Buttazzo Chapter~7~\cite{Buttazzo2011}.
+
+%---------------------------------------------------------------
+\section{Background: Task Model and Problem}
+\label{sec:background}
+
+\subsection{Task Parameters}
+
+Following~\cite{Buttazzo2011} §7.3, each periodic task $\tau_i$ is
+characterised by: nominal priority $P_i$ (assigned by Rate-Monotonic
+or Deadline-Monotonic rules, lower number = higher priority),
+worst-case computation time $C_i$, period $T_i$, and relative
+deadline $D_i$.
+Active (dynamic) priority $p_i$ may deviate from $P_i$ under a
+resource access protocol.
+
+\subsection{Semaphores and Critical Sections}
+
+Exclusive resources are protected by binary semaphores.
+A critical section $z_{i,k}$ of task $\tau_i$ on semaphore $S_k$ has
+duration $\delta_{i,k}$; the collection of all its critical sections
+is $Z_i = \{z_{i,k}\}$.
+The \texttt{wait}($S_k$) / \texttt{signal}($S_k$) primitives enforce mutual
+exclusion.
+A task blocked on a busy semaphore moves to the WAITING state;
+the three-state model (READY, RUNNING, WAITING) is taught in the
+course slides (RTS Introduction, slide~31).
+
+\subsection{Priority Inversion}
+
+Without a resource access protocol, consider three tasks
+$\tau_1 \succ \tau_2 \succ \tau_3$ in priority (Fig.~7.4
+in~\cite{Buttazzo2011}):
+
+\begin{enumerate}
+  \item $\tau_3$ acquires semaphore $S_R$ and enters its critical section.
+  \item $\tau_1$ (highest priority) is released and immediately preempts
+        $\tau_3$. $\tau_1$ calls \texttt{wait}($S_R$) but $S_R$ is held
+        by $\tau_3$, so $\tau_1$ blocks.
+  \item $\tau_2$ (which does not use $S_R$) preempts $\tau_3$.
+  \item $\tau_1$ remains blocked for the entire duration of $\tau_2$'s
+        execution, even though $\tau_2$ has lower priority than $\tau_1$.
+\end{enumerate}
+
+If any number of medium-priority tasks arrive during this window, the
+blocking of $\tau_1$ is \emph{unbounded}. This is
+the priority inversion problem.
+
+%---------------------------------------------------------------
+\section{Protocol Landscape}
+\label{sec:landscape}
+
+Table~\ref{tab:protocols} summarises the five resource access protocols
+in Buttazzo Chapter~7~\cite{Buttazzo2011}.
+
+\begin{table*}[t]
+\caption{Resource access protocol comparison (Buttazzo Table 7.5, p.~248)}
+\label{tab:protocols}
+\centering
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Property         & NPP & HLP & PIP & PCP & SRP \\
+\midrule
+Deadlock-free    & \checkmark & \checkmark & \textbf{--} & \checkmark & \checkmark \\
+Chained blocking & -- & -- & \textbf{Yes} & -- & -- \\
+Transparent      & \checkmark & -- & \checkmark & -- & -- \\
+Max blockings    & 1 & 1 & $\alpha_i$ & 1 & 1 \\
+Implementation   & Easy & Easy & \textbf{Hard} & Medium & Easy \\
+Dynamic prio.    & -- & -- & -- & -- & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\textbf{NPP} (Non-Preemptive Protocol): tasks run non-preemptively
+in critical sections; single blocking, but over-conservative.
+\textbf{HLP/IPC} (Highest Locker Priority / Immediate Priority
+Ceiling): tasks inherit the ceiling of the semaphore at entry time;
+single blocking but requires ceiling declarations.
+\textbf{PIP}: defers blocking to actual access time, no code change
+required (transparent), bounded inversion, but no deadlock prevention.
+\textbf{PCP} (Priority Ceiling Protocol, also~\cite{Sha1990}):
+adds lock-grant rule eliminating deadlock and chained blocking.
+\textbf{SRP} (Stack Resource Policy~\cite{Baker1991}): extends PCP
+to multi-unit resources and EDF scheduling, enables stack sharing.
+
+%---------------------------------------------------------------
+\section{Priority Inheritance Protocol}
+\label{sec:pip}
+
+\subsection{Algorithm}
+
+PIP~\cite{Sha1990} is defined via two primitives (Buttazzo §7.6.4,
+pp.~224--225), reproduced here with slight notation adjustments:
+
+\medskip
+\noindent\textbf{pi\_wait}($S_k$):
+\begin{enumerate}
+  \item If $S_k$ is free, lock it and assign $S_k.\mathit{holder} \leftarrow \tau_{\mathit{exe}}$.
+  \item Otherwise, add $\tau_{\mathit{exe}}$ to $S_k$'s wait queue and
+        set $\tau_{\mathit{exe}}$ to BLOCKED.
+        Let $\tau_j = S_k.\mathit{holder}$; apply inheritance:
+        \begin{equation}
+          p_j(R_k) = \max\!\bigl\{P_j,\;\max_h\{P_h \mid \tau_h\text{ blocked on }R_k\}\bigr\}.
+          \label{eq:pip}
+        \end{equation}
+        If $\tau_j$ is itself blocked on another semaphore $S_m$,
+        apply the rule transitively to $S_m.\mathit{holder}$.
+\end{enumerate}
+
+\noindent\textbf{pi\_signal}($S_k$):
+\begin{enumerate}
+  \item Unlock $S_k$.
+  \item Wake the highest-priority task in $S_k$'s wait queue (if any)
+        and grant it the lock.
+  \item Restore $\tau_j$'s active priority to
+        $\max\bigl\{P_j,\,\max\{p_h \mid \tau_h \text{ still blocked by } \tau_j\}\bigr\}$.
+  \item If $p_j < p^*$ (highest ready task), perform a context switch.
+\end{enumerate}
+
+Inheritance is \emph{transitive}: if $\tau_3$ blocks $\tau_2$ which
+blocks $\tau_1$, then $\tau_3$ inherits $P_1$ via $\tau_2$
+(§7.6.1, p.~215, Lemma~7.2 requires nested critical sections for
+transitivity to arise).
+
+\subsection{Push-Through Blocking}
+
+A key consequence of PIP is \emph{push-through blocking}
+(Buttazzo Lemma~7.1, p.~218): if $\tau_j$ (low priority) holds
+$S_R$ and blocks $\tau_i$ (high priority), then $\tau_j$ inherits
+$P_i$ and thereby prevents any intermediate-priority task from preempting
+it.
+Lemma~7.1 identifies the exact condition:
+semaphore $S_k$ causes push-through blocking to $\tau_i$ if and only
+if there exists a task with priority greater than $P_i$ using $S_k$
+and a task with priority less than $P_i$ using $S_k$.
+
+\subsection{Blocking Time Bound}
+
+Let $l_i$ be the number of distinct lower-priority tasks that can block
+$\tau_i$, and $s_i$ the number of distinct semaphores accessed by both
+$\tau_i$ and lower-priority tasks.
+Then (Theorem~7.2~\cite{Sha1990}, Buttazzo p.~219):
+\begin{equation}
+  \alpha_i = \min(l_i, s_i).
+  \label{eq:alpha}
+\end{equation}
+$\tau_i$ is blocked by at most $\alpha_i$ critical sections.
+The worst-case blocking time is computed using the algorithm in
+Fig.~7.11~\cite{Buttazzo2011} ($\mathcal{O}(mn^2)$):
+\begin{align}
+  B_i^l &= \sum_{j>i}\sum_k \delta_{j,k} \cdot \mathbb{1}[\text{block}]
+  \label{eq:bl}\\
+  B_i^s &= \text{(sum by semaphore)}
+  \label{eq:bs}\\
+  B_i   &= \min(B_i^l, B_i^s).
+  \label{eq:bi}
+\end{align}
+This bound is \emph{not tight}: $B_i^l$ may sum critical sections
+guarded by the same semaphore, which Lemma~7.4 shows cannot both block
+simultaneously (p.~222).
+
+\subsection{Schedulability}
+
+With blocking terms, the Liu-Layland sufficient test (Buttazzo Eq.~7.19)
+becomes:
+\begin{equation}
+  \forall i:\quad \sum_{h<i}\frac{C_h}{T_h} + \frac{C_i + B_i}{T_i}
+  \;\leq\; i\!\left(2^{1/i}-1\right).
+  \label{eq:ll}
+\end{equation}
+When this test is inconclusive, the exact Response-Time Analysis
+(Eq.~7.22) is applied iteratively:
+\begin{equation}
+  R_i = C_i + B_i + \sum_{h<i}\!\left\lceil\frac{R_i}{T_h}\right\rceil C_h.
+  \label{eq:rta}
+\end{equation}
+
+\subsection{Limitations}
+
+\textbf{No deadlock prevention.} If two tasks acquire two semaphores
+in reverse order, a lock cycle can form (Fig.~7.13~\cite{Buttazzo2011},
+p.~226): PCP's lock-grant rule is needed to prevent this.
+
+\textbf{Chained blocking.} If $\tau_i$ accesses $n$ distinct
+semaphores each held by a different lower-priority task, it can be blocked
+$n$ times (Fig.~7.12, p.~225); the number is bounded by $\alpha_i$
+from (\ref{eq:alpha}), but PCP limits this to exactly one.
+
+\textbf{Kernel complexity.} The transitive chain traversal in
+\texttt{pi\_wait} adds latency inside an atomic kernel section;
+Buttazzo rates PIP's implementation as ``hard'' --- the only protocol
+with that rating (Table~7.5, p.~248).
+
+%---------------------------------------------------------------
+\section{UPPAAL Verification}
+\label{sec:uppaal}
+
+\subsection{Model Structure}
+
+A UPPAAL timed-automata model (based on~\cite{Behrmann2004}) was
+constructed with four components:
+(1)~a parametric \texttt{Task} template instantiated for $\tau_1$,
+$\tau_2$, $\tau_3$, each with locations \textsc{Idle}, \textsc{Ready},
+\textsc{Running}, \textsc{CriticalSection}, \textsc{Blocked};
+(2)~a \texttt{ResourceManager} automaton with locations
+\textsc{Free}, \textsc{Held}, and committed \textsc{Granting},
+encoding the binary semaphore $S_R$ with PIP inheritance logic
+(Eq.~\ref{eq:pip});
+(3)~an \texttt{Observer} process for property monitoring.
+
+Shared global variables encode active priorities
+(\texttt{int[1,9]~act\_prio[3]}), the semaphore holder
+(\texttt{int[-1,2]~holder}), blocking duration counters
+(\texttt{int[0,20]~block\_dur[3]}), and observer flags
+(\texttt{bool~blocking\_tau1}).
+Synchronisation channels \texttt{lock\_req[N]!}, \texttt{lock\_ack[N]!},
+\texttt{unlock\_rel[N]!} coordinate lock operations between tasks and
+the resource manager.
+The key inheritance transition in \texttt{ResourceManager} fires on
+\texttt{lock\_req[0]?} while \texttt{holder==2} (i.e., $\tau_3$ holds
+the lock when $\tau_1$ requests it), and immediately applies the
+assignment
+\begin{quote}\small\ttfamily
+act\_prio[2] := (P1 < act\_prio[2]) ? P1 : act\_prio[2]
+\end{quote}
+implementing Eq.~(\ref{eq:pip}) atomically.
+
+\subsection{Properties Verified}
+
+The five verification queries target distinct PIP correctness properties.
+
+\textbf{P1 (Deadlock-free):}
+\begin{quote}\small\ttfamily
+A[] not deadlock
+\end{quote}
+No lock cycle can form with a single resource and consistent acquisition order;
+this query would \emph{fail} if two resources were acquired in reverse order
+(Fig.~7.13~\cite{Buttazzo2011}).
+
+\textbf{P2 (No unbounded inversion):}
+\begin{quote}\small\ttfamily
+A[] (blocking\_tau1 imply not\\
+\quad(tau2.Running and not blocked\_tau2))
+\end{quote}
+When $\tau_1$ is blocked on $S_R$, $\tau_2$ cannot run freely — verifying
+push-through blocking (Lemma~7.1). An \emph{invariant}: must hold in every
+reachable state.
+
+\textbf{P3 (Blocking within bound):}
+\begin{quote}\small\ttfamily
+A[] (block\_dur[0]<=4 and block\_dur[1]<=4\\
+\quad and block\_dur[2]==0)
+\end{quote}
+Observed blocking stays within $B_1{=}4$, $B_2{=}4$, $B_3{=}0$, linking
+the formal model to the schedulability analysis.
+
+\textbf{P4 (Inheritance reachable):}
+\begin{quote}\small\ttfamily
+E<> (act\_prio[2]==1)
+\end{quote}
+There exists a reachable state where $\tau_3$ holds inherited priority~$P_1$,
+confirming the inheritance mechanism fires (non-vacuous witness).
+
+\textbf{P5 (Priority restored):}
+\begin{quote}\small\ttfamily
+A[] (rm.Free imply act\_prio[2]==3)
+\end{quote}
+Whenever $S_R$ is free, $\tau_3$'s priority equals~$P_3$, verifying
+\texttt{restore\_prio} correctly undoes every inheritance.
+
+%---------------------------------------------------------------
+\section{Application Example}
+\label{sec:example}
+
+\subsection{Task Set}
+
+Three periodic tasks are scheduled by Rate-Monotonic (shorter period =
+higher priority):
+$\tau_1$~($C{=}1, T{=}6, D{=}6$, prio~1, uses~$S_R$, CS~len~1),
+$\tau_2$~($C{=}2, T{=}8, D{=}8$, prio~2, no shared resource),
+$\tau_3$~($C{=}4, T{=}24, D{=}24$, prio~3, uses~$S_R$, CS~len~4).
+The semaphore ceiling $C(S_R) = P_1$ (highest priority using $S_R$).
+
+\subsection{Priority Inversion Trace (Without PIP)}
+
+$\tau_3$ is released at $t{=}0$ and acquires $S_R$ immediately;
+at $t{=}2$, $\tau_1$ and $\tau_2$ are released.
+$\tau_1$ preempts $\tau_3$, calls \texttt{pi\_wait}($S_R$), and blocks
+($S_R$ held by $\tau_3$, which retains priority~$P_3$).
+$\tau_2$ (priority~$P_2$) preempts $\tau_3$ at $t{=}2$.
+$\tau_1$ remains blocked for the entire duration of $\tau_2$'s
+execution (2~units), plus $\tau_3$'s remaining CS (2~units):
+\emph{total blocking = 4~units}, of which 2 units are due to the
+lower-priority task~$\tau_2$ --- priority inversion.
+Table~\ref{tab:trace} shows the schedule.
+
+\begin{table*}[t]
+\caption{Schedule trace (one column per time unit). W = waiting for $S_R$;
+         CS = in critical section; $\dagger$ = inherits $P_1$.}
+\label{tab:trace}
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}l|ccccccccc@{}}
+\toprule
+Task & 0 & 1 & 2 & 3 & 4 & 5 & 6 & 7 & \ldots \\
+\midrule
+\multicolumn{10}{@{}l}{\emph{Without PIP:}} \\
+$\tau_1$ & -- & -- & W & W & W & W & \textbf{run} & -- & \\
+$\tau_2$ & -- & -- & run & run & -- & -- & -- & -- & \\
+$\tau_3$ & CS & CS & -- & -- & CS & CS & -- & -- & \\
+\midrule
+\multicolumn{10}{@{}l}{\emph{With PIP:}} \\
+$\tau_1$ & -- & -- & W & W & \textbf{run} & -- & -- & -- & \\
+$\tau_2$ & -- & -- & rdy & rdy & run & run & -- & -- & \\
+$\tau_3$ & CS & CS & CS$^\dagger$ & CS$^\dagger$ & -- & -- & -- & -- & \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{PIP Trace (With PIP)}
+
+At $t{=}2$, when $\tau_1$ blocks on $S_R$, PIP applies
+Eq.~(\ref{eq:pip}): $p_3(S_R) = \max(P_3, P_1) = P_1 = 1$.
+$\tau_3$ now has priority~1; $\tau_2$ (priority~2) \emph{cannot}
+preempt it.
+$\tau_3$ runs uninterrupted until it signals $S_R$ at $t{=}4$
+($2$ remaining CS units).
+$\tau_3$'s priority is restored to $P_3$.
+$\tau_1$ is unblocked and runs to completion.
+\emph{Blocking = 2~units} --- bounded by $\tau_3$'s remaining CS,
+with no contribution from $\tau_2$.
+
+\subsection{Blocking Time Computation}
+
+With $\delta_{3,R} = 4$ (CS length, continuous-time convention;
+Buttazzo's discrete formula subtracts~1, giving $\delta_{3,R}{-}1=3$):
+
+\noindent\textbf{$B_1$ (direct blocking):}
+$\gamma_1 = \{Z_{3,R}\}$ since $P_3 < P_1$ and $C(S_R){=}P_1 \geq P_1$
+(Lemma~7.5).
+$l_1 = s_1 = 1$, so $\alpha_1 = 1$.
+$B_1^l = B_1^s = \delta_{3,R} = 4$, hence $B_1 = 4$.
+
+\noindent\textbf{$B_2$ (push-through blocking, Lemma~7.1):}
+$S_R$ is accessed by $\tau_1$ ($P_1 > P_2$) and $\tau_3$ ($P_3 < P_2$),
+so $\tau_3$ can inherit $P_1 > P_2$, blocking $\tau_2$.
+$l_2 = s_2 = 1$, $\alpha_2 = 1$, $B_2 = 4$.
+
+\noindent\textbf{$B_3 = 0$} ($\tau_3$ is lowest-priority).
+
+\begin{align*}
+  B_1 &= \min(B_1^l, B_1^s) = \min(4, 4) = 4 \\
+  B_2 &= \min(4, 4) = 4 \\
+  B_3 &= 0
+\end{align*}
+
+\subsection{Schedulability Analysis}
+
+$U = \tfrac{1}{6} + \tfrac{2}{8} + \tfrac{4}{24} = 0.583$.
+
+Liu-Layland (Eq.~\ref{eq:ll}) is inconclusive for $\tau_2$
+($0.917 > 0.828$; sufficient test only).
+Response-Time Analysis (Eq.~\ref{eq:rta}) gives exact results:
+\begin{align*}
+  R_1 = 5 &\leq D_1 = 6,\\
+  R_2 = 8 &\leq D_2 = 8,\\
+  R_3 = 8 &\leq D_3 = 24.
+\end{align*}
+All tasks are schedulable under RM with PIP.
+This illustrates Buttazzo's observation that the Liu-Layland test
+becomes only sufficient in the presence of blocking terms (p.~246).
+
+%---------------------------------------------------------------
+\section{C\texttt{++} Simulator}
+\label{sec:impl}
+
+A discrete-time simulator was implemented in C\texttt{++}17 to
+validate the hand trace and confirm that blocking bounds hold
+over a full hyperperiod ($\mathrm{LCM}(6,8,24){=}24$ time units),
+matching the same task parameters as Section~\ref{sec:example}.
+
+\subsection{Design}
+
+The core data structures mirror Buttazzo's notation directly.
+Each \texttt{Task} struct holds \texttt{nom\_prio} (nominal, fixed),
+\texttt{act\_prio} (active, modified by PIP), \texttt{remaining}
+(computation time left), CS state variables (\texttt{has\_lock},
+\texttt{cs\_rem}), and blocking metadata (\texttt{blk\_start},
+\texttt{max\_blk}).
+The single \texttt{Semaphore} struct tracks \texttt{holder} and
+a wait queue of task indices.
+
+The \texttt{inherit\_up(holder, req\_prio)} function implements
+Eq.~(\ref{eq:pip}) recursively: if the requested priority is higher
+than the holder's current active priority, boost the holder and check
+whether the holder is itself in a wait queue, triggering another
+\texttt{inherit\_up} call on that queue's holder (transitive
+inheritance, Lemma~7.2).
+\texttt{restore\_prio} scans all semaphore wait queues on release
+and sets the task's active priority to the maximum of its nominal
+priority and the highest priority among remaining waiters.
+
+\subsection{Simulation Results}
+
+\textbf{Without PIP:} At $t{=}4$, $\tau_1$'s second instance preempts
+$\tau_3$ and blocks on $S_R$.
+Since $\tau_3$ retains its nominal priority~$P_3$, $\tau_2$ preempts
+$\tau_3$ when it becomes ready.
+$\tau_1$ remains blocked for 5~units (inversion window:
+$\tau_2$ executes, then $\tau_3$ finishes CS).
+This exceeds the bound $B_1{=}4$ --- consistent with the theory:
+without a protocol there is no bound.
+$\tau_1$ misses its deadline ($R_1{=}7 > D_1{=}6$).
+
+\textbf{With PIP:} At $t{=}4$, $\tau_1$ blocks and \texttt{inherit\_up}
+immediately raises $\tau_3$'s active priority to $P_1{=}1$.
+$\tau_2$ (priority~$P_2{=}2$) cannot preempt $\tau_3$-at-$P_1$.
+$\tau_3$ completes its CS at $t{=}7$; \texttt{restore\_prio} sets
+$\tau_3$ back to~$P_3{=}3$.
+$\tau_1$'s observed blocking: $7{-}4{=}3 \leq B_1{=}4$~\checkmark.
+All deadlines met across the full hyperperiod.
+Simulator output: \texttt{tau1: observed=3, B1\_bound=4~[OK]}.
+
+%---------------------------------------------------------------
+\section{Critical Evaluation}
+\label{sec:eval}
+
+\subsection{Strengths}
+
+\textbf{Bounded inversion.} Theorem~7.2 provides a formal upper bound
+$\alpha_i = \min(l_i, s_i)$ on the number of critical sections
+blocking $\tau_i$; unbounded priority inversion is impossible under PIP.
+
+\textbf{Transparency.} PIP requires no change to task code
+(§7.10, p.~247); \texttt{pi\_wait}/\texttt{pi\_signal} are drop-in
+replacements for standard semaphore primitives.
+This makes PIP the natural choice for POSIX systems
+(\texttt{PTHREAD\_PRIO\_INHERIT}~\cite{Sha1990}) and legacy RTOS migration.
+The 1997 Mars Pathfinder anomaly was resolved by enabling
+\texttt{PTHREAD\_PRIO\_INHERIT} on a VxWorks mutex --- a one-line
+configuration change, no code restructuring.
+
+\textbf{Schedulability integration.} The $B_i$ values feed directly
+into standard schedulability tests (Eqs.~\ref{eq:ll}--\ref{eq:rta}).
+
+\subsection{Limitations}
+
+\textbf{No deadlock prevention.} Two tasks acquiring two semaphores
+in reverse order create a lock cycle that PIP cannot detect or break
+(Fig.~7.13~\cite{Buttazzo2011}). The fix is either semaphore
+total-ordering (by ID) or replacement with PCP.
+
+\textbf{Chained blocking.} Multiple sequential semaphore accesses
+can produce $\alpha_i > 1$ blockings (Fig.~7.12). PCP eliminates
+this by guaranteeing a single blocking per task.
+
+\textbf{WCET input sensitivity.} Equations~\ref{eq:bl}--\ref{eq:bi}
+require exact $\delta_{j,k}$ values (CS WCETs).
+Abella et al.~\cite{Abella2015} show that none of the current WCET
+analysis methods is fully trustworthy on modern hardware;
+under-estimated WCETs may make the system appear schedulable when it
+is not.
+
+\textbf{Uniprocessor scope.} Buttazzo Chapter~7 explicitly addresses
+uniprocessor systems (§7.3).
+On multiprocessors, priority boosting requires inter-processor
+interrupts (IPIs) with non-deterministic latency.
+Gracioli et al.~\cite{Gracioli2013} measure such overhead in a real
+RTOS and show it has no equivalent in Buttazzo's blocking formula;
+PIP as defined by~\cite{Sha1990} does not directly transfer to
+multiprocessor contexts.
+
+\subsection{Transfer Analysis}
+
+PIP is suitable for: single-core RTOS with few shared resources and
+total semaphore ordering enforced; POSIX-based systems requiring
+transparent legacy migration; automotive ECUs on classic AUTOSAR
+single-core platforms.
+PIP is unsuitable for: multiprocessor/multicore systems; EDF-scheduled
+systems (use SRP~\cite{Baker1991}); safety-critical contexts requiring
+certified deadlock freedom (use PCP).
+
+%---------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+
+The Priority Inheritance Protocol solves the priority inversion problem
+by dynamically elevating resource holders' priorities, bounding
+$\tau_i$'s blocking to at most $\alpha_i = \min(l_i, s_i)$ critical
+sections (Theorem~7.2).
+Its transparency allows deployment without code changes, making it
+attractive for legacy systems and POSIX environments.
+However, PIP does not prevent deadlocks or chained blocking, both
+eliminated by the Priority Ceiling Protocol at the cost of
+transparency.
+The exact Response-Time Analysis (Eq.~\ref{eq:rta}) is necessary for
+schedulability decisions when the Liu-Layland test is inconclusive.
+On multiprocessors, PIP's assumptions break due to IPI latency; this
+remains an active research direction.
+
+\section*{Acknowledgements}
+
+I thank Prof.\ Dr.\ Stefan Henkler for introducing the topic of
+real-time resource synchronisation and for the structured seminar
+milestones that guided this work.
+AI usage during this work is documented in the accompanying AI usage
+protocol files as required by the seminar protocol.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
