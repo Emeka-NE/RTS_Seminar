@@ -1,0 +1,310 @@
+{
+  "protocol_version": "0.2",
+  "student_id": "nnaemeka-nnachi-egwu",
+  "course": "Real-Time Systems Seminar — HSHL, Prof. Dr. Stefan Henkler",
+  "milestone": "M2-scientific-contextualization",
+  "topic": "Priority Inheritance Protocol (Resource Access Protocols)",
+  "exported_at": "2026-05-27T17:30:00+02:00",
+  "entries": [
+    {
+      "id": "e-m2-001",
+      "timestamp": "2026-05-27T09:30:00+02:00",
+      "parent_id": null,
+      "objective": "Understand the chronological development of the 5 resource access protocols",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "where did each of the 5 protocols in Buttazzo ch7 come from historically? who invented them and when?",
+      "ai_output_summary": "NPP and HLP are earliest (no specific citation in Buttazzo). PIP and PCP both from Sha, Rajkumar, Lehoczky [SRL90] 1990. SRP from Baker [Bak91] 1991.",
+      "verification": {
+        "actions": [
+          "Verified: Buttazzo p.214 says PIP 'proposed by Sha, Rajkumar and Lehoczky [SRL90]'.",
+          "PCP: §7.7 p.226 same attribution [SRL90].",
+          "SRP: §7.8 p.234 'Baker [Bak91]'.",
+          "NPP and HLP: no specific inventor cited in Buttazzo — they are presented as classical approaches."
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "medium"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §1",
+        "usage_type": "summarization",
+        "direct_text_reused": false
+      },
+      "reflection": "Good starting point for the landscape section. The fact that PIP and PCP share the same authors [SRL90] explains why PCP is explicitly designed to fix PIP's deficiencies (deadlock, chained blocking) rather than being an independent approach."
+    },
+    {
+      "id": "e-m2-002",
+      "timestamp": "2026-05-27T10:45:00+02:00",
+      "parent_id": "e-m2-001",
+      "objective": "Understand why PIP is 'transparent' and why this matters for real deployments",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "buttazzo says PIP and NPP are 'transparent' (Table 7.5). what does that mean exactly and why does it matter for something like VxWorks?",
+      "ai_output_summary": "Transparency means the task code doesn't change — the pi_wait/pi_signal are drop-in replacements for standard wait/signal. Non-transparent protocols (HLP, PCP, SRP) require a new system call to declare resource ceilings before execution.",
+      "verification": {
+        "actions": [
+          "Verified §7.10 p.247: 'A transparent protocol... can be implemented without modifying the task code'.",
+          "Buttazzo specifically mentions VxWorks as example.",
+          "Confirmed that PTHREAD_PRIO_INHERIT is the POSIX standardisation of this."
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §2",
+        "usage_type": "terminology-clarification",
+        "direct_text_reused": false
+      },
+      "reflection": "The transparency argument is key for M2's application domain section. It explains why VxWorks and POSIX chose PIP over PCP: migrating legacy code requires transparency. The Mars Pathfinder fix was enabling PTHREAD_PRIO_INHERIT — one config change, no code rewrite."
+    },
+    {
+      "id": "e-m2-003",
+      "timestamp": "2026-05-27T12:00:00+02:00",
+      "parent_id": null,
+      "objective": "Find how Kopetz's definition of real-time systems connects to priority inversion as a correctness failure",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "professor said Kopetz definition is foundational (slide 7): a real-time system is correct not just logically but also on the physical instant results are produced. how does this make priority inversion a correctness failure rather than just a performance issue?",
+      "ai_output_summary": "Because in the Kopetz sense, a result produced too late is logically wrong. When tau1 misses its deadline due to unbounded priority inversion, the system produces a logically incorrect output (the result arrives after the physical instant it was required). This is not a quality-of-service degradation — it is a system failure.",
+      "verification": {
+        "actions": [
+          "Verified Kopetz definition against slide 7 of RTS_Introduction.pdf.",
+          "Slide 13: 'real time means predictable' and 'result after deadline is wrong, not just late'.",
+          "Slide 48: EDF is optimal only without resource competition — confirms inversion breaks theoretical guarantees.",
+          "Buttazzo p.208: 'can cause critical deadlines to be missed' — matches Kopetz severity."
+        ],
+        "level": "secondary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §3",
+        "usage_type": "argument-critique",
+        "direct_text_reused": false
+      },
+      "reflection": "This connection is the strongest theoretical motivation in M2. The Kopetz definition, slide 7, plus slide 13 ('wrong, not just late') together make the argument watertight: priority inversion is not a scheduling inefficiency, it is a correctness violation by the fundamental definition of real-time systems."
+    },
+    {
+      "id": "e-m2-004",
+      "timestamp": "2026-05-27T14:00:00+02:00",
+      "parent_id": null,
+      "objective": "Understand what the WCET paper contributes that Buttazzo does not",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "the WCET paper (Abella et al 2015) is listed as a reference. what specifically does it tell me about PIP that Buttazzo doesn't? i need to justify every reference",
+      "ai_output_summary": "Buttazzo's Eq 7.9-7.11 assumes the delta_{j,k} values (CS WCETs) are known exactly. The WCET paper shows this is non-trivial: hardware complexity (caches, pipelines), measurement bias, and multicore interference all make trustworthy WCET estimation difficult. None of the surveyed methods is fully trustworthy.",
+      "verification": {
+        "actions": [
+          "Read WCET paper abstract and conclusion (1.txt, 10.txt in the zip).",
+          "Table I of paper: taxonomy of WCET methods — SDTA, MBDTA, SPTA, MBPTA, HYPTA.",
+          "Conclusion: 'none of the surveyed methods is fully trustworthy on all accounts'.",
+          "Buttazzo makes no mention of WCET estimation difficulty — he treats delta as known."
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §7, M3 §3",
+        "usage_type": "literature-search-support",
+        "direct_text_reused": false
+      },
+      "reflection": "The WCET paper justification is now clear: it adds the missing step between Buttazzo's formula (inputs = delta_{j,k}) and reality (where does delta_{j,k} come from?). In safety-critical certification, every CS WCET must be validated — and that is itself a hard problem."
+    },
+    {
+      "id": "e-m2-005",
+      "timestamp": "2026-05-27T15:30:00+02:00",
+      "parent_id": null,
+      "objective": "Understand what the global/partitioned scheduling paper contributes regarding PIP's multiprocessor limitation",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "the Gracioli 2013 paper on global vs partitioned scheduling — how exactly does this ground PIP's multiprocessor limitation? PIP is uniprocessor but i need a specific argument not just 'multiprocessors are different'",
+      "ai_output_summary": "Gracioli et al measure OS overhead (IPI latency, scheduling overhead, cache coherence delays) on actual hardware. Their Table 1 shows overhead sources that have no equivalent in Buttazzo's uniprocessor B_i formula. PIP's inheritance mechanism requires the holder's scheduler to be notified, which on multiprocessors involves IPIs with non-deterministic latency — destroying the determinism PIP assumes.",
+      "verification": {
+        "actions": [
+          "Read Gracioli paper sections 1-3 (1.txt, 10.txt, 11.txt from zip).",
+          "Table 1: overhead taxonomy includes IPI latency (delta_ipi), cache affinity loss (cpmd) — no equivalent in Buttazzo.",
+          "Paper uses LITMUSRT on Linux with G-EDF and P-EDF — actual implementation, not theory.",
+          "PIP citation not found in the paper — this is the correct gap: PIP simply doesn't appear because it's out of scope for multiprocessors."
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "partially-accepted",
+        "issues": [
+          "Paper does not directly cite PIP or discuss its multiprocessor failure. The connection is my own inference: PIP requires synchronous priority boost, which is incompatible with non-deterministic IPI latency. I should be careful to present this as my analysis, not a claim from the paper."
+        ],
+        "usefulness": "medium"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §5, M3 §4",
+        "usage_type": "argument-critique",
+        "direct_text_reused": false
+      },
+      "reflection": "The paper supports the argument by showing what overhead DOES exist on multiprocessors. The PIP inference is mine. M3 will be careful to say 'the overhead model in [GP] reveals why PIP's assumptions break on multiprocessors' rather than claiming the paper directly addresses PIP."
+    },
+    {
+      "id": "e-m2-006",
+      "timestamp": "2026-05-27T17:00:00+02:00",
+      "parent_id": null,
+      "objective": "Draft the application domains section covering POSIX and automotive OSEK",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "i need to describe where PIP is actually used: POSIX pthread_mutexattr_setprotocol with PTHREAD_PRIO_INHERIT, and automotive OSEK/AUTOSAR. give me technically accurate content i can put in M2",
+      "ai_output_summary": "Described POSIX: pthread_mutexattr_setprotocol with PTHREAD_PRIO_INHERIT, supported by Linux real-time, VxWorks, QNX. Automotive: OSEK OS (1995) uses ceiling protocol by default but vendor extensions support PIP-like inheritance. ISO 26262 requires bounded blocking time. Mars Pathfinder example.",
+      "verification": {
+        "actions": [
+          "POSIX specification: PTHREAD_PRIO_INHERIT is standard, verified against POSIX.1-2008 knowledge.",
+          "Mars Pathfinder: multiple sources confirm VxWorks mutex with priority inheritance was the fix.",
+          "OSEK/AUTOSAR: the 'OSEK ceiling priority protocol' is HLP/IPC, not PIP — checked against Buttazzo §7.5 equivalence.",
+          "ISO 26262 ASIL requirement: plausible but not verified against ISO document directly — marked as general knowledge."
+        ],
+        "level": "secondary-source-check"
+      },
+      "evaluation": {
+        "status": "partially-accepted",
+        "issues": [
+          "ISO 26262 ASIL claim needs a specific citation if it goes in the paper — currently general knowledge only.",
+          "OSEK uses HLP/IPC by default, not PIP. The claim that some vendor extensions support PIP should be qualified."
+        ],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §4",
+        "usage_type": "summarization",
+        "direct_text_reused": false
+      },
+      "reflection": "The POSIX content is solid. The automotive section needs more care: OSEK's standard protocol is ceiling-based (HLP/IPC), not PIP. I revised M2 to say 'OSEK uses a ceiling protocol; PIP is available in some extensions and POSIX-compliant RTOS layers on top.' More precise."
+    },
+    {
+      "id": "e-m2-007",
+      "timestamp": "2026-05-28T09:00:00+02:00",
+      "parent_id": null,
+      "objective": "Understand why [SRL90] is cited for both PIP and PCP — are they in the same paper?",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "buttazzo cites [SRL90] for both pip and pcp. is that the same paper? i thought they were separate protocols",
+      "ai_output_summary": "Yes, the same paper. Sha, Rajkumar, Lehoczky (1990) introduced both PIP and PCP as a progression: first PIP (the baseline), then PCP as a stronger version that adds the lock-grant rule to fix PIP's deadlock and chained-blocking problems. The paper title is 'Priority Inheritance Protocols: An Approach to Real-Time Synchronization' — the plural 'protocols' is a hint that both are in there.",
+      "verification": {
+        "actions": [
+          "Verified Buttazzo §7.6 p.214: 'Priority Inheritance Protocol was proposed by Sha, Rajkumar and Lehoczky [SRL90]'.",
+          "Verified Buttazzo §7.7 p.226: 'The Priority Ceiling Protocol was introduced by Sha, Rajkumar and Lehoczky [SRL90]'.",
+          "Verified title from BibTeX entry Sha1990: 'Priority Inheritance Protocols: An Approach to Real-Time Synchronization'. DOI: 10.1109/12.57058."
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "medium"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §1, M4 §III",
+        "usage_type": "literature-search-support",
+        "direct_text_reused": false
+      },
+      "reflection": "Important for the context section: the PIP→PCP relationship is intentional — PCP was designed as a direct response to PIP's known deficiencies (deadlock, chained blocking), and both came from the same authors in the same paper. This makes the comparison table (Table I in M4) more coherent: PCP is not an independent solution but an evolution of PIP."
+    },
+    {
+      "id": "e-m2-008",
+      "timestamp": "2026-05-28T11:30:00+02:00",
+      "parent_id": null,
+      "objective": "Find a concrete example of where PIP's push-through blocking actually prevented a deadline miss in practice",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "is there a real case study or documented system where push-through blocking from PIP specifically saved a task from missing a deadline? not just the mars pathfinder (that was priority inversion without PIP) but PIP actually working",
+      "ai_output_summary": "Push-through blocking isn't something systems fail without — systems fail from priority INVERSION without any protocol. When PIP is in place and working correctly, push-through blocking is the mechanism that PREVENTS medium-priority tasks from extending the high-priority task's wait. Mars Pathfinder is actually the canonical case: with PTHREAD_PRIO_INHERIT enabled, push-through blocking would have kept the bus task's priority elevated so the scheduler couldn't have let medium-priority tasks preempt it. The 'fix' case IS the push-through case.",
+      "verification": {
+        "actions": [
+          "Cross-referenced: Buttazzo p.216-217 Lemma 7.1 defines push-through blocking as a mechanism within PIP, not a separate failure mode.",
+          "Mars Pathfinder references: multiple secondary sources confirm the fix was PTHREAD_PRIO_INHERIT. With the fix, the meteorological bus mutex holder inherits the highest blocked task priority, preventing lower-priority tasks from running while it holds the mutex.",
+          "Confirmed: 'push-through blocking prevents inversion' is a tautology from the Lemma 7.1 structure. The real-world evidence is always 'PIP prevents deadline misses' not 'push-through blocking specifically saved deadline X'."
+        ],
+        "level": "methodological-check"
+      },
+      "evaluation": {
+        "status": "partially-accepted",
+        "issues": [
+          "The question assumed push-through blocking is separately observable from PIP. It isn't — it's the mechanism BY WHICH PIP prevents unbounded inversion. Rephrased for M2: 'PIP's push-through blocking mechanism (Lemma 7.1) is demonstrated by the Mars Pathfinder fix, where enabling PTHREAD_PRIO_INHERIT caused the holder to resist preemption by medium-priority tasks.'"
+        ],
+        "usefulness": "medium"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §4",
+        "usage_type": "argument-critique",
+        "direct_text_reused": false
+      },
+      "reflection": "The AI helped me realize I was confusing push-through blocking as something that 'prevents' versus something that 'is'. Push-through blocking IS the inheritance propagation that stops medium-priority preemption. The Pathfinder case is the correct real-world demonstration — the fix made it work correctly, which is the push-through mechanism in action."
+    },
+    {
+      "id": "e-m2-009",
+      "timestamp": "2026-05-28T14:00:00+02:00",
+      "parent_id": null,
+      "objective": "Clarify Baker 1991 SRP's relationship to PIP for the protocol landscape section",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "i need to place baker 1991 SRP in my context section. how exactly does SRP improve on PCP (and by extension PIP)? what are the 3 things buttazzo says it adds?",
+      "ai_output_summary": "Buttazzo §7.8 p.234 says SRP extends PCP in three essential points: (1) allows multi-unit resources, (2) supports dynamic priority scheduling (EDF not just RM), (3) allows sharing of runtime stack resources. The stack sharing is particularly valuable for embedded systems with many tasks — SRP can reduce stack requirements by 90% in typical cases (Buttazzo §7.8.5 example).",
+      "verification": {
+        "actions": [
+          "Read Buttazzo §7.8 p.234: 'The Stack Resource Policy is a technique proposed by Baker [Bak91] for accessing shared resources. It extends the Priority Ceiling Protocol (PCP) in three essential points: 1. multi-unit resources, 2. dynamic priority scheduling, 3. runtime stack sharing.'",
+          "Read §7.8.5 example: 100 tasks on 10 preemption levels, 10 tasks each, 10 KB stack each. Per-task: 1000 KB. SRP single stack: 100 KB. Savings: 90%.",
+          "Verified Baker 1991 BibTeX: 'Stack-Based Scheduling of Realtime Processes', Real-Time Systems journal vol.3."
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M2 §2, M4 §III",
+        "usage_type": "summarization",
+        "direct_text_reused": false
+      },
+      "reflection": "The three extension points are now clear and sourced. For the comparison table, SRP's 'Dynamic prio: YES' is the only such entry — all other protocols are RM/DM only. This makes SRP the natural choice for EDF-scheduled systems, which is a key point in the M3 transfer analysis (PIP is unsuitable for EDF; use SRP instead)."
+    }
+  ]
+}
