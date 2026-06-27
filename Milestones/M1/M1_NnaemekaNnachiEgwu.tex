@@ -1,0 +1,218 @@
+% M1_NnaemekaNnachiEgwu.tex
+% Milestone 1: Technical Understanding and Research Framing
+% Real-Time Systems Seminar, HSHL, Prof. Dr. Stefan Henkler
+% Author: Nnaemeka Nnachi-Egwu
+%
+% NOTE: Per seminar checklist, M1-M3 use structured notes format (bullets,
+% formulas, tables, annotations) inside the IEEEtran template shell.
+% Publication-style prose is NOT used here (not expected, not appropriate per checklist).
+
+\documentclass[conference,onecolumn]{IEEEtran}
+\usepackage{amsmath, amssymb, booktabs, array, microtype, url}
+
+\begin{document}
+
+\title{Milestone 1: Technical Understanding\\
+  {\large Priority Inheritance Protocol (Resource Access Protocols)}}
+
+\author{\IEEEauthorblockN{Nnaemeka Nnachi-Egwu}
+\IEEEauthorblockA{Electronic Engineering\\
+Hochschule Hamm-Lippstadt\\
+Lippstadt, Germany\\
+nnaemeka.nnachi-egwu@stud.hshl.de}}
+
+\maketitle
+
+%---------------------------------------------------------------
+\section{Problem Statement and Motivation}
+
+\textbf{Problem:} Shared exclusive resources in real-time systems cause
+\emph{priority inversion}: a high-priority task $\tau_i$ can be blocked
+for an \emph{unbounded} duration by lower-priority tasks that do not
+even use the contested resource.
+
+\textbf{Formal setting} (Buttazzo \S7.3, p.~209):
+\begin{itemize}
+  \item $n$ periodic tasks $\{\tau_1, \ldots, \tau_n\}$, priority $P_i$
+        (lower number = higher priority, RM assignment).
+  \item $m$ shared resources $\{R_1, \ldots, R_m\}$ protected by binary
+        semaphores $\{S_1, \ldots, S_m\}$.
+  \item Mutual exclusion via \texttt{wait}($S_k$) / \texttt{signal}($S_k$).
+  \item Critical section $z_{i,k}$ of $\tau_i$ on $S_k$, duration
+        $\delta_{i,k}$; collection $Z_{i,k}$, $\sigma_i$, $\gamma_i$.
+\end{itemize}
+
+\textbf{Why it matters (Kopetz definition, RTS slide 7):}
+A real-time system is correct iff results are produced at the right
+\emph{physical instant}, not only logically.
+Priority inversion can cause $\tau_1$ to miss its deadline even with
+$U < 1$ (slide 48: ``EDF is optimal only when no resource competition'').
+A missed hard deadline is a \emph{correctness failure}, not a
+performance degradation.
+
+\textbf{Scenario (Fig.~7.4, Buttazzo p.~208):} $\tau_3$ holds $S_R$;
+$\tau_1$ (high prio) arrives and blocks; $\tau_2$ (medium prio, no $S_R$)
+preempts $\tau_3$ --- $\tau_1$ blocked while lower-priority $\tau_2$ runs.
+Inversion window: $[t_3, t_6]$. Unbounded if multiple $\tau_2$-class
+tasks present.
+
+%---------------------------------------------------------------
+\section{Core Technical Idea}
+
+PIP (\textbf{Priority Inheritance Protocol}), Sha, Rajkumar, Lehoczky
+[SRL90], Buttazzo \S7.6, pp.~214--225:
+
+When $\tau_i$ blocks on $S_k$ held by $\tau_j$ ($P_j < P_i$),
+$\tau_j$ \textbf{inherits} $\tau_i$'s priority:
+\begin{equation}
+  p_j(R_k) = \max\!\bigl\{P_j,\;\max_h\{P_h \mid \tau_h\text{ blocked on }R_k\}\bigr\}.
+  \label{eq:pip}
+\end{equation}
+
+\textbf{Effect:} Medium-priority tasks (like $\tau_2$) cannot preempt
+the boosted $\tau_j$ --- priority inversion bounded.
+
+\textbf{Restoration:} On \texttt{pi\_signal}($S_k$), $\tau_j$ reverts to
+$\max\{P_j, \max\{p_h \mid \tau_h\text{ still blocked by }\tau_j\}\}$.
+
+\textbf{Transitivity (Buttazzo p.~215, Lemma~7.2):} If $\tau_3 \to \tau_2
+\to \tau_1$ in blocking chain, $\tau_3$ inherits $P_1$ via $\tau_2$.
+\emph{Only occurs with nested critical sections.}
+
+%---------------------------------------------------------------
+\section{Relevant Formalism}
+
+\subsection{Notation (\S7.3, p.~209)}
+\begin{itemize}
+  \item $P_i$: nominal priority; $p_i$: active priority
+  \item $z_{i,k}$, $Z_{i,k}$: CS and set of CS of $\tau_i$ on $S_k$
+  \item $\delta_{i,k}$: CS duration; $\sigma_i$: \# CS of $\tau_i$;
+        $\gamma_i$: set of CS that can block $\tau_i$
+  \item $l_i$: \# lower-prio tasks that can block $\tau_i$;
+        $s_i$: \# semaphores that can block $\tau_i$
+  \item $B_i$: worst-case blocking time of $\tau_i$
+\end{itemize}
+
+\subsection{Lemmas and Theorems (all Buttazzo \S7.6)}
+\begin{itemize}
+  \item \textbf{Lemma 7.1} (push-through, p.~218): $S_k$ causes push-through
+        blocking to $\tau_i$ iff $\exists\tau_h: P_h > P_i$ using $S_k$
+        AND $\exists\tau_j: P_j < P_i$ using $S_k$.
+  \item \textbf{Lemma 7.2} (transitivity, p.~218): Transitivity occurs
+        only with nested CS.
+  \item \textbf{Lemma 7.3} (p.~219): $\tau_i$ blocked at most $l_i$ times.
+  \item \textbf{Lemma 7.4} (p.~219): $\tau_i$ blocked at most $s_i$ times.
+  \item \textbf{Theorem 7.2} (p.~219, [SRL90]): $\tau_i$ blocked at most
+        $\alpha_i = \min(l_i, s_i)$ CS.
+  \item \textbf{Lemma 7.5} (p.~221): $Z_{j,k}$ blocks $\tau_i$ only if
+        $P_j < P_i \leq C(S_k)$.
+\end{itemize}
+
+\subsection{Blocking Time Computation (\S7.6.3, Eqs.~7.9--7.11)}
+
+\[
+  B_i^l = \text{sum along task dimension};\quad
+  B_i^s = \text{sum along semaphore dimension};\quad
+  B_i = \min(B_i^l, B_i^s).
+\]
+
+\[
+  \gamma_i = \{Z_{j,k} \mid P_j < P_i \leq C(S_k)\}.
+\]
+
+Algorithm (Fig.~7.11): complexity $\mathcal{O}(mn^2)$.
+\textbf{Not tight} (Buttazzo p.~222): $B_i^l$ can sum CS on same
+semaphore (impossible per Lemma~7.4).
+
+\subsection{Schedulability (\S7.9)}
+
+\textbf{Liu-Layland (sufficient, Eq.~7.19):}
+\[
+  \forall i:\;\sum_{h<i}\frac{C_h}{T_h} + \frac{C_i+B_i}{T_i} \leq i\!\left(2^{1/i}-1\right).
+\]
+
+\textbf{RTA (exact, Eq.~7.22):}
+\[
+  R_i = C_i + B_i + \sum_{h<i}\!\left\lceil\frac{R_i}{T_h}\right\rceil C_h
+  \quad\text{(iterate to fixed point)}.
+\]
+
+%---------------------------------------------------------------
+\section{Assumptions and Scope Limitations}
+
+\begin{itemize}
+  \item \textbf{Single processor} (explicit in \S7.3, p.~209).
+  \item \textbf{Fixed priorities} (RM/DM); PIP not defined for EDF
+        (footnote 2, p.~209; Spuri extension exists but not in Ch.~7).
+  \item \textbf{WCET known exactly}: $\delta_{i,k}$ values assumed given.
+        In practice, WCET estimation is itself a hard problem [WCET].
+  \item \textbf{Binary semaphores}: single-unit resources only.
+  \item \textbf{No deadlock prevention}: see \S7.6.5, Fig.~7.13.
+  \item \textbf{No chained blocking prevention}: $\alpha_i$ can be $> 1$,
+        unlike PCP (Theorem~7.4) which bounds to exactly~1.
+  \item \textbf{Transparency assumption}: kernel must implement
+        \texttt{pi\_wait}/\texttt{pi\_signal}; application code unchanged.
+\end{itemize}
+
+%---------------------------------------------------------------
+\section{Runtime, Memory, and Algorithm Aspects}
+
+\begin{itemize}
+  \item Blocking computation: $\mathcal{O}(mn^2)$ offline
+        (Fig.~7.11 algorithm).
+  \item Exact algorithm (Rajkumar): $\mathcal{O}(2^n)$ --- impractical
+        for large $n$.
+  \item \texttt{pi\_wait} at runtime: unbounded chain traversal (bounded
+        in practice, e.g.\ Linux \texttt{RTMUTEX\_DEPTH\_LIMIT}=48).
+  \item Memory: extra fields in TCB (active priority, blocked-on semaphore,
+        semaphore queue) --- $\mathcal{O}(n + m)$ additional state.
+  \item Table~7.5 rates PIP ``hard'' to implement --- the only protocol
+        so rated.
+\end{itemize}
+
+%---------------------------------------------------------------
+\section{Five-Protocol Comparison}
+
+{\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Property & NPP & HLP & PIP & PCP & SRP \\
+\midrule
+Deadlock-free & $\checkmark$ & $\checkmark$ & \textbf{--} & $\checkmark$ & $\checkmark$ \\
+Chained block & -- & -- & \textbf{Yes} & -- & -- \\
+Transparent & $\checkmark$ & -- & $\checkmark$ & -- & -- \\
+Max blockings & 1 & 1 & $\alpha_i$ & 1 & 1 \\
+Impl. effort & Easy & Easy & \textbf{Hard} & Medium & Easy \\
+Dynamic prio & -- & -- & -- & -- & $\checkmark$ \\
+\bottomrule
+\end{tabular}}\\
+Source: Buttazzo Table~7.5, p.~248.
+
+%---------------------------------------------------------------
+\section{Verified Application Example}
+
+\textbf{Task set:} $\tau_1(C{=}1,T{=}6,D{=}6,\text{prio}=1,\text{CS}=1)$,
+$\tau_2(C{=}2,T{=}8,D{=}8,\text{prio}=2,\text{no~CS})$,
+$\tau_3(C{=}4,T{=}24,D{=}24,\text{prio}=3,\text{CS}=4)$.
+Semaphore $S_R$; ceiling $C(S_R)=P_1$.
+
+\textbf{Blocking:} $B_1=4$ (direct), $B_2=4$ (push-through, Lemma~7.1),
+$B_3=0$.
+
+\textbf{RTA:} $R_1=5\leq 6$\,\checkmark, $R_2=8\leq 8$\,\checkmark,
+$R_3=8\leq 24$\,\checkmark. All schedulable.
+
+\textbf{Trace highlight:} $\tau_3$ inherits $P_1$ at $t=2$; $\tau_2$
+push-through blocked; $\tau_3$ CS ends $t=4$; $\tau_1$ blocking~$=2$
+(within $B_1=4$ bound).
+
+\textbf{Open questions noted during study:}
+(1)~$\delta{-}1$ vs.\ continuous time: Eq.~(7.9) subtracts~1 (discrete artefact);
+hand trace uses full $\delta$ --- both valid in their respective contexts.
+(2)~Eq.~(7.11) not tight (Buttazzo p.~222); Rajkumar exact algorithm
+($\mathcal{O}(2^n)$) beyond scope here.
+(3)~Linux \texttt{PTHREAD\_PRIO\_INHERIT} bounds chain depth at 48 hops
+--- formal guarantees may not fully hold on the implementation.
+(4)~PIP uniprocessor only --- exact multicore failure mode addressed in M2.
+
+\end{document}
