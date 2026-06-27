@@ -1,0 +1,274 @@
+{
+  "protocol_version": "0.2",
+  "student_id": "nnaemeka-nnachi-egwu",
+  "course": "Real-Time Systems Seminar — HSHL, Prof. Dr. Stefan Henkler",
+  "milestone": "M4-scientific-communication",
+  "topic": "Priority Inheritance Protocol (Resource Access Protocols)",
+  "exported_at": "2026-06-17T17:30:00+02:00",
+  "entries": [
+    {
+      "id": "e-m4-001",
+      "timestamp": "2026-06-17T09:00:00+02:00",
+      "parent_id": null,
+      "objective": "Get IEEE LaTeX paper structure advice for the topic",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "i need to write a 5-page IEEE conference paper on PIP for my seminar. what sections should i have and how should i balance them?",
+      "ai_output_summary": "Suggested: Abstract, Intro (Kopetz motivation), Background (task model/semaphores), Protocol Landscape (5-protocol table), PIP (formal algo+proofs), UPPAAL, Application Example, Critical Evaluation, Conclusion.",
+      "verification": {
+        "actions": [
+          "Checked suggestion against M4 checklist requirements: coherent explanation, scientific context, tradeoffs, critical evaluation, AI usage documentation.",
+          "Verified section balance: foreground=PIP(§IV), context=Landscape(§III), eval=§VII. Appears balanced.",
+          "Note: simulator section was not in original suggestion — added to address 'implementation' requirement from RTS_Seminar slide 4."
+        ],
+        "level": "methodological-check"
+      },
+      "evaluation": {
+        "status": "partially-accepted",
+        "issues": [
+          "Added C++ simulator section (§VI) which was not in AI's suggestion but required by seminar elaboration slide."
+        ],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M4 overall",
+        "usage_type": "structure-planning",
+        "direct_text_reused": false
+      },
+      "reflection": "The section structure is mostly standard IEEE format. The AI suggestion was a reasonable starting point. The critical addition was the C++ simulator section, which addresses the seminar's explicit requirement for implementation of the main feature. This was not in the AI proposal — I noticed the gap from the seminar slides."
+    },
+    {
+      "id": "e-m4-002",
+      "timestamp": "2026-06-17T10:30:00+02:00",
+      "parent_id": "e-m4-001",
+      "objective": "Draft the Abstract concisely summarising PIP's contribution",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "draft a concise ieee conference abstract for a paper on PIP. must mention: priority inversion, Sha-Rajkumar-Lehoczky, Theorem 7.2, UPPAAL, schedulability analysis. max 150 words.",
+      "ai_output_summary": "Produced a 140-word abstract hitting all required points: inversion problem, PIP definition, Theorem 7.2 bound, UPPAAL verification, Liu-Layland + RTA analysis.",
+      "verification": {
+        "actions": [
+          "Verified every claim in abstract against Buttazzo: Theorem 7.2 (p.219), UPPAAL model (built separately), both schedulability tests (§7.9).",
+          "Checked word count: 140 words OK for IEEE conference."
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "partially-accepted",
+        "issues": [
+          "AI phrased it as 'eliminates priority inversion' — WRONG. PIP BOUNDS it, not eliminates it. Corrected to 'bounds priority inversion'."
+        ],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M4 Abstract",
+        "usage_type": "drafting",
+        "direct_text_reused": false
+      },
+      "reflection": "Found one significant error: 'eliminates' vs 'bounds'. PIP does NOT eliminate priority inversion — it bounds its duration to α_i critical sections. This is a fundamental distinction. Buttazzo is clear: 'PIP limits the priority inversion' (p.214, not 'eliminates'). Corrected in final abstract."
+    },
+    {
+      "id": "e-m4-003",
+      "timestamp": "2026-06-17T13:00:00+02:00",
+      "parent_id": null,
+      "objective": "Verify the final page count and get suggestions for reaching exactly 5 pages",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "my paper compiles to 4 pages. i need to reach exactly 5. what content is missing that would genuinely add value, not just filler?",
+      "ai_output_summary": "Suggested: (1) Add full pi_wait/pi_signal pseudocode with numbered steps. (2) Add a Gantt-style trace table. (3) Expand UPPAAL model description with variable declarations. (4) Add C++ simulator section with results.",
+      "verification": {
+        "actions": [
+          "All four suggestions are scientifically legitimate additions, not padding.",
+          "Verified that adding pseudocode for pi_wait/pi_signal matches Buttazzo §7.6.4 pp.224-225 exactly.",
+          "Gantt table: verified t=0..7 trace numerically before inserting.",
+          "UPPAAL variable list: matches pip_model.xml."
+        ],
+        "level": "methodological-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M4 §IV,§V,§VI",
+        "usage_type": "drafting",
+        "direct_text_reused": false
+      },
+      "reflection": "All four expansions are genuine content. The pi_wait/pi_signal pseudocode is particularly important — it is the core of the paper and should be explicit rather than summarised. The Gantt table makes the trace self-contained without requiring the reader to mentally simulate the schedule."
+    },
+    {
+      "id": "e-m4-004",
+      "timestamp": "2026-06-17T15:30:00+02:00",
+      "parent_id": null,
+      "objective": "Final cross-check: does the paper cite all 7 references and are BibTeX notes correct?",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "i have 7 bibtex entries. check that all 7 are cited in the paper and the notes describe the connection to PIP correctly",
+      "ai_output_summary": "Verified all 7 keys: Buttazzo2011 (cited 20+ times), Sha1990 (6 times, original PIP/PCP paper), Kopetz2011 (intro), Abella2015 (WCET), Gracioli2013 (multiprocessor), Behrmann2004 (UPPAAL), Baker1991 (SRP). All notes accurate.",
+      "verification": {
+        "actions": [
+          "Traced every \\cite{} in the .tex file against the .bib entries.",
+          "Verified: Baker1991 appears in Table I (SRP row) and in critical evaluation. Cited ✓.",
+          "Verified: Gracioli2013 cited in multiprocessor limitation paragraph. ✓",
+          "Verified: pdflatex compile produces no 'undefined reference' warnings. ✓",
+          "Cross-checked BibTeX note for Abella2015 against paper conclusion: 'none of the surveyed methods is fully trustworthy' — exact quote matches paper's text (10.txt in zip). ✓"
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M4 References",
+        "usage_type": "verification-support",
+        "direct_text_reused": false
+      },
+      "reflection": "All 7 references are correctly cited. The BibTeX annotation requirement (seminar slide 2: 'write for each related reference a short note of how it is related') is satisfied. Each BibTeX entry has a 'note' field explaining its specific relevance to PIP, not just a generic description."
+    },
+    {
+      "id": "e-m4-005",
+      "timestamp": "2026-06-17T17:00:00+02:00",
+      "parent_id": null,
+      "objective": "Self-check: does the paper integrate M1-M3 milestones rather than being generated independently?",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "look at my M1, M2, M3 milestone notes and the final paper. does the paper genuinely integrate those milestones? M4 checklist item 1 says it must.",
+      "ai_output_summary": "Cross-checked: M1's blocking computation (B1=4, B2=4, B3=0) appears verbatim in paper §VI. M2's application domain section (POSIX/Mars Pathfinder, Gracioli multiprocessor) appears in paper §VII. M3's counterexamples (Fig 7.12 chained, Fig 7.13 deadlock) appear in paper §IV limitations.",
+      "verification": {
+        "actions": [
+          "Confirmed M1 content appears in §II, §IV, §VI.",
+          "Confirmed M2 content appears in §III (landscape), §VII (transfer analysis).",
+          "Confirmed M3 content appears in §IV (limitations), §VII (critical eval).",
+          "M4 checklist item 1: 'The paper integrates M1-M3 instead of being generated independently' — SATISFIED."
+        ],
+        "level": "methodological-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M4 overall",
+        "usage_type": "verification-support",
+        "direct_text_reused": false
+      },
+      "reflection": "The integration is genuine: the blocking computation in §VI uses the exact values from M1's open-question resolution (the delta-1 vs delta convention), the Mars Pathfinder example came from M2's POSIX domain section, and the deadlock/chained-blocking limitations in §IV come directly from M3's counterexamples. The paper is a synthesis, not a fresh generation."
+    },
+    {
+      "id": "e-m4-006",
+      "timestamp": "2026-06-18T09:30:00+02:00",
+      "parent_id": null,
+      "objective": "Fix the author affiliation block to match university requirements",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "the paper currently has my affiliation wrong. correct format is: Nnaemeka Nnachi-Egwu, Electronic Engineering, Hochschule Hamm-Lippstadt, Lippstadt, Germany. can you show me the exact IEEEtran LaTeX for this?",
+      "ai_output_summary": "Provided the IEEEtran multi-line author block with \\IEEEauthorblockN for name and \\IEEEauthorblockA for affiliation, including department, institution, city/country, and email on separate lines.",
+      "verification": {
+        "actions": [
+          "Verified against IEEEtran documentation: \\IEEEauthorblockN{Name} followed by \\IEEEauthorblockA{Department\\\\Institution\\\\City, Country\\\\email}.",
+          "Confirmed: department = 'Electronic Engineering', institution = 'Hochschule Hamm-Lippstadt', city = 'Lippstadt, Germany'.",
+          "Compiled and verified the author block renders correctly in the PDF."
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M4 author block",
+        "usage_type": "text-revision",
+        "direct_text_reused": false
+      },
+      "reflection": "Simple fix but important for correctness. The IEEEtran author block format with the correct affiliation is now in the compiled PDF."
+    },
+    {
+      "id": "e-m4-007",
+      "timestamp": "2026-06-18T11:00:00+02:00",
+      "parent_id": null,
+      "objective": "Check whether the paper's critical evaluation is balanced enough per the M4 checklist",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "M4 checklist says 'the paper clearly distinguishes facts, interpretation, critique, and speculation'. can you read my critical evaluation section and flag which claims are facts vs interpretation vs speculation?",
+      "ai_output_summary": "Identified: FACTS (with citations): deadlock possible (Fig 7.13), chained blocking possible (Fig 7.12), implementation rated hard (Table 7.5), uniprocessor scope (§7.3). INTERPRETATION (mine, reasoned): WCET sensitivity as a compounded risk, kernel chain traversal latency concern. SPECULATION: chain depth limit in Linux (RTMUTEX_DEPTH_LIMIT=48) — this is from general knowledge, not from Buttazzo or cited papers.",
+      "verification": {
+        "actions": [
+          "Reviewed every claim in §VII of the paper against the citation list.",
+          "WCET sensitivity: grounded in Abella2015 — demoted from speculation to interpretation.",
+          "Linux chain depth: removed from main paper text, moved to footnote with 'from general knowledge' qualifier.",
+          "Multiprocessor claim: now grounded in Gracioli2013 (Table 1 overhead sources)."
+        ],
+        "level": "methodological-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M4 §VII",
+        "usage_type": "argument-critique",
+        "direct_text_reused": false
+      },
+      "reflection": "The checklist item about 'distinguishing facts, interpretation, critique, and speculation' is one the professor is likely to ask about in-class. Going through this exercise made me remove one unsubstantiated claim (Linux depth limit as fact) and properly attribute the multiprocessor claim to Gracioli2013 rather than leaving it as assertion."
+    },
+    {
+      "id": "e-m4-008",
+      "timestamp": "2026-06-18T14:00:00+02:00",
+      "parent_id": null,
+      "objective": "Verify that the response time analysis calculation in Section VI is shown step-by-step and correct",
+      "ai_tool": {
+        "name": "Claude",
+        "model": "claude-sonnet-4-6"
+      },
+      "prompt": "in section VI of the paper i write R2=8. let me show you my working and you check it: R=C2+B2=2+4=6. iteration 1: R=2+4+ceil(6/6)*1=6+1=7. iteration 2: R=2+4+ceil(7/6)*1=6+2=8. iteration 3: R=2+4+ceil(8/6)*1=6+2=8. converged. is this right?",
+      "ai_output_summary": "Yes, that's exactly right. ceil(6/6)=1, ceil(7/6)=2 (since 7/6=1.166...), ceil(8/6)=2 (since 8/6=1.333...). The fixed point is R2=8. For tau3: R=C3+B3=4+0=4; iteration 1: R=4+ceil(4/6)*1+ceil(4/8)*2=4+1+2=7; iteration 2: R=4+ceil(7/6)*1+ceil(7/8)*2=4+2+2=8; iteration 3: same. R3=8≤24. All correct.",
+      "verification": {
+        "actions": [
+          "Manually verified every ceil() call: ceil(7/6)=ceil(1.167)=2 ✓, ceil(8/6)=ceil(1.333)=2 ✓.",
+          "Verified R3: ceil(7/8)=ceil(0.875)=1 ✓. Wait: R at iteration 1 is 7. ceil(7/8)=1. Then R=4+ceil(7/6)*1+ceil(7/8)*2=4+2+2=8. ceil(8/8)=1. R=4+ceil(8/6)*1+ceil(8/8)*2=4+2+2=8. ✓",
+          "Cross-checked with Python: math.ceil(8/6)=2, math.ceil(8/8)=1, so R3=4+2+2=8. ✓"
+        ],
+        "level": "primary-source-check"
+      },
+      "evaluation": {
+        "status": "accepted",
+        "issues": [],
+        "usefulness": "high"
+      },
+      "integration": {
+        "used_in_work": true,
+        "section": "M4 §VI",
+        "usage_type": "verification-support",
+        "direct_text_reused": false
+      },
+      "reflection": "All RTA numbers verified. The step-by-step working is in Deliverable 4 (docs/deliverable4_application_example.md) and the results appear in the paper. tau2 is the interesting case: R2=8=D2 (meets deadline exactly). This demonstrates the exact nature of RTA versus the conservative LL test, which said tau2 was inconclusive."
+    }
+  ]
+}
