@@ -1,0 +1,221 @@
+% M3_NnaemekaNnachiEgwu.tex
+% Milestone 3: Critical Evaluation and Transfer
+% Real-Time Systems Seminar, HSHL, Prof. Dr. Stefan Henkler
+% Author: Nnaemeka Nnachi-Egwu
+%
+% Structured notes format per seminar checklist.
+
+\documentclass[conference,onecolumn]{IEEEtran}
+\usepackage{amsmath, amssymb, booktabs, array, microtype, url}
+
+\begin{document}
+
+\title{Milestone 3: Critical Evaluation and Transfer\\
+  {\large Priority Inheritance Protocol (Resource Access Protocols)}}
+
+\author{\IEEEauthorblockN{Nnaemeka Nnachi-Egwu}
+\IEEEauthorblockA{Electronic Engineering\\
+Hochschule Hamm-Lippstadt\\
+Lippstadt, Germany\\
+nnaemeka.nnachi-egwu@stud.hshl.de}}
+
+\maketitle
+
+%---------------------------------------------------------------
+\section{Concrete Strengths (with Buttazzo citations)}
+
+\textbf{S1 --- Bounded priority inversion (Theorem~7.2, p.~219):}\\
+Without any protocol, the inversion window is unbounded --- any number
+of medium-priority tasks can prolong it indefinitely (Fig.~7.4).
+PIP bounds blocking to at most $\alpha_i = \min(l_i, s_i)$ critical
+sections per task. This is a \emph{formal guarantee}, not a heuristic.
+
+\textbf{S2 --- Transparency (Buttazzo \S7.10, p.~247, Table~7.5):}\\
+\texttt{pi\_wait}/\texttt{pi\_signal} are drop-in replacements for
+standard semaphore primitives. Task \emph{application code} does not change.
+No ceiling declarations required.
+This is the only protocol (besides NPP) rated ``transparent.''
+\emph{Practical consequence:} POSIX \texttt{PTHREAD\_PRIO\_INHERIT}
+converts any existing mutex-protected code to PIP with one attribute
+call. Mars Pathfinder fix: one line of configuration.
+
+\textbf{S3 --- Low pessimism vs.\ HLP (Buttazzo p.~214):}\\
+HLP blocks at activation time based on ceiling of \emph{entered} CS,
+even if the resource-accessing branch is never taken at runtime.
+PIP defers to actual \texttt{wait}: no blocking unless genuine
+resource contention.
+\emph{In practice:} PIP's observed blocking is usually below the
+$B_i$ bound (the bound is worst-case, not average-case).
+
+\textbf{S4 --- Transitive inheritance for nested CS (Lemma~7.2, p.~218):}\\
+For nested critical sections, priority propagates transitively up the
+chain, preventing intermediate holders from being preempted.
+Without this, a 3-level nesting would still suffer priority inversion
+at the intermediate level.
+
+\textbf{S5 --- Direct feed into schedulability (Buttazzo \S7.9):}\\
+$B_i$ values (Eqs.~7.9--7.11) plug directly into Liu-Layland (Eq.~7.19)
+and RTA (Eq.~7.22) without modification to the scheduling framework.
+PIP is the only protocol that provides this tight integration with
+standard fixed-priority analysis.
+
+%---------------------------------------------------------------
+\section{Concrete Limitations and Counterexamples}
+
+\subsection{L1: No Deadlock Prevention (Buttazzo \S7.6.5, Fig.~7.13, p.~226)}
+
+\textbf{Minimal counterexample:}
+Two tasks ($\tau_1$ high, $\tau_2$ low), two semaphores ($S_a$, $S_b$):
+\begin{itemize}
+  \item $\tau_1$: \texttt{wait}($S_a$); \texttt{wait}($S_b$); \ldots
+  \item $\tau_2$: \texttt{wait}($S_b$); \texttt{wait}($S_a$); \ldots
+\end{itemize}
+Timeline: $t_1$: $\tau_2$ locks $S_b$; $t_2$: $\tau_1$ preempts; $t_3$:
+$\tau_1$ locks $S_a$; $t_4$: $\tau_1$ tries $S_b$ $\to$ blocked, $\tau_2$
+inherits $P_1$; $t_5$: $\tau_2$ tries $S_a$ $\to$ \textbf{deadlock}.
+
+\textbf{Why PIP cannot prevent it:}
+\texttt{pi\_wait} only boosts priority; it never denies a lock on a
+free semaphore. The deadlock arises from a lock-\emph{order} cycle,
+which PIP has no mechanism to detect.
+
+\textbf{Buttazzo (p.~227):} ``The deadlock does not depend on the Protocol
+but is caused by an erroneous use of semaphores.''
+
+\textbf{Fix:} Total ordering on semaphore acquisition (by ID) eliminates
+the cycle. Or replace PIP with PCP (Theorem~7.3: PCP prevents deadlock).
+
+\textbf{Note:} PIP does not \emph{cause} deadlocks --- it is neutral.
+The same deadlock would occur without any protocol.
+
+\subsection{L2: No Chained Blocking Prevention (Buttazzo \S7.6.5, Fig.~7.12, p.~225)}
+
+\textbf{Minimal counterexample:}
+$\tau_1 \succ \tau_2 \succ \tau_3$; two semaphores $S_a$, $S_b$;
+$\tau_2$ holds $S_b$; $\tau_3$ holds $S_a$.
+$\tau_1$ arrives: blocked on $S_a$ (first blocking), then unblocked,
+then blocked on $S_b$ (second blocking) $\to$ \textbf{two} blockings.
+
+With $n$ distinct semaphores, each held by a different lower-priority task:
+$\tau_1$ blocked up to $\alpha_1 = \min(n, n) = n$ times.
+PCP (Theorem~7.4) limits this to exactly~1.
+
+\subsection{L3: Kernel Implementation Complexity (Table~7.5, p.~248)}
+
+PIP is the \emph{only} protocol rated ``Hard'' in Table~7.5.
+Root cause: transitive chain traversal in \texttt{pi\_wait} must be
+executed atomically in the kernel. Each step must:
+(1) read current holder's blocked-on semaphore,
+(2) boost that holder,
+(3) repeat if that holder is also blocked.
+
+This loop adds non-deterministic interrupt latency.
+Production kernels (Linux \texttt{rtmutex.c}) bound chain depth
+to prevent infinite loops --- which means formal guarantees may not
+fully hold on the implementation.
+
+Transparency (S2 above) is for \emph{application} programmers;
+the \emph{kernel} implementation is decidedly non-trivial.
+
+\textbf{Note on WCET sensitivity:}
+$B_i$ formulas (Eqs.~7.9--7.11) require exact $\delta_{j,k}$ values.
+Abella et~al.~[WCET] show no current WCET method is fully trustworthy
+--- especially on modern hardware with caches, pipelines, and multicore
+interference. Two distinct pessimism sources compound:
+(1)~structural: $B_i^l$ sums CS that cannot simultaneously block
+(Lemma~7.4 pessimism), (2)~input uncertainty: conservative WCET
+estimates inflate $\delta_{j,k}$, making $B_i$ unnecessarily large.
+\emph{This applies to all protocols with CS-duration-based blocking
+formulas, not PIP specifically.}
+
+%---------------------------------------------------------------
+\section{Runtime, Memory, and Scalability}
+
+\begin{itemize}
+  \item Offline blocking computation: $\mathcal{O}(mn^2)$ per
+        Fig.~7.11 algorithm. Feasible for $n, m \leq$ tens.
+  \item Exact algorithm: $\mathcal{O}(2^n)$ --- impractical for
+        $n > 15$.
+  \item Runtime (per \texttt{pi\_wait}): chain traversal --- worst case
+        proportional to nesting depth; bounded by implementation limits.
+  \item Additional TCB fields: active priority, blocked-on semaphore ID,
+        semaphore wait queues. $\mathcal{O}(n + m)$ extra state.
+  \item Semaphore queues: $\mathcal{O}(n)$ total across all semaphores
+        (each task in at most one queue at a time).
+\end{itemize}
+
+%---------------------------------------------------------------
+\section{Transfer Analysis}
+
+\subsection{Where PIP Is Suitable}
+
+\begin{enumerate}
+  \item \textbf{Single-core RTOS with bounded nesting:} $l_i$ and $s_i$
+        are small; $\alpha_i$ is small; $B_i$ is manageable.
+        Total semaphore ordering enforced $\to$ no deadlock risk.
+  \item \textbf{POSIX legacy migration:} \texttt{PTHREAD\_PRIO\_INHERIT}
+        is one attribute call; no code restructuring.
+        Transparent, immediate improvement in worst-case timing.
+  \item \textbf{Automotive ECU (classic AUTOSAR, single-core):}
+        Bounded blocking time for ASIL certification;
+        short CS WCETs for low-complexity ECU code;
+        RM scheduling standard.
+  \item \textbf{Any system where deadlock is provably absent by design:}
+        If all semaphores acquired in fixed total order (common rule),
+        PIP's only remaining weakness is chained blocking (Theorem~7.2
+        bounds it), and the implementation overhead is acceptable.
+\end{enumerate}
+
+\subsection{Where PIP Is Unsuitable}
+
+\begin{enumerate}
+  \item \textbf{Multiprocessor/multicore systems:} Priority boost on
+        a remote processor requires IPI; latency is non-deterministic.
+        Gracioli et~al.~[GP]: IPI overhead has no equivalent in
+        Buttazzo's $B_i$ formula $\to$ analysis invalid.
+        Use MPCP, FMLP, or MSRP.
+  \item \textbf{EDF-scheduled systems:} PIP undefined for dynamic priorities.
+        Use SRP [Bak91] which natively supports EDF via preemption levels.
+  \item \textbf{Safety-critical systems requiring certified deadlock freedom:}
+        DO-178C, IEC~61508, ISO~26262 high-ASIL require
+        provable deadlock absence. PIP alone is insufficient; use PCP
+        or enforce and prove total semaphore ordering.
+  \item \textbf{Deep nested CS with many tasks:} Transitive chain in
+        \texttt{pi\_wait} adds atomic interrupt latency; $\alpha_i$ can
+        be large; blocking bound grows.
+  \item \textbf{Systems with unreliable WCET estimates:} If $\delta_{j,k}$
+        cannot be bounded tightly (modern hardware, caches, multicore
+        interference), the $B_i$ computation is unsound.
+        $B_i$ under-estimates $\to$ false schedulability guarantee.
+\end{enumerate}
+
+%---------------------------------------------------------------
+\section{Proposed Extensions}
+
+\textbf{E1 --- POSIX validation:}
+Implement the 3-task set with \texttt{pthread} + \texttt{SCHED\_FIFO},
+run under \texttt{PTHREAD\_PRIO\_INHERIT} vs.\ plain mutex.
+Measure actual $\tau_1$ blocking with \texttt{clock\_gettime}.
+Hypothesis: observed blocking $\leq B_1 = 4$ in all runs,
+and strictly less in most (bound is not tight).
+
+\textbf{E2 --- UPPAAL deadlock witness:}
+Add a second semaphore $S_a$ to the UPPAAL model with reverse
+acquisition order in one task. Verify that \texttt{A[] not deadlock}
+\emph{fails} and the counterexample trace matches Fig.~7.13,
+making the deadlock limitation formally witnessed.
+
+\textbf{E3 --- Tight blocking computation:}
+Implement Rajkumar's exact $\mathcal{O}(2^n)$ algorithm in Python
+for $n \leq 8$. Compare against Eq.~(7.11)'s result on the
+4-task, 3-semaphore example (Buttazzo Table~7.1, p.~222)
+to quantify the pessimism gap.
+
+\textbf{E4 --- Multiprocessor overhead model:}
+Using the overhead taxonomy from Gracioli et~al.~[GP] (Table~1:
+$\Delta_\mathrm{cxs}$, $\Delta_\mathrm{scd}$, $\Delta_\mathrm{ipi}$),
+derive a modified $B_i$ formula for a dual-core system with
+Global-EDF + PIP semantics and check schedulability under
+realistic IPI latency values from [GP].
+
+\end{document}
