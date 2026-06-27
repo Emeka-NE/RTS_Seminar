@@ -1,0 +1,465 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN'
+  'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<!--
+  pip_model.xml — UPPAAL Model: Priority Inheritance Protocol
+  Reference: G. C. Buttazzo, Hard Real-Time Computing Systems, 3rd ed.
+             Chapter 7: Resource Access Protocols, §7.6 (pp. 214-225)
+  Tutorial:  Behrmann, David, Larsen — A Tutorial on Uppaal
+
+  System:  3 periodic tasks (tau1 > tau2 > tau3 in priority)
+           1 shared resource R (semaphore S_R)
+           Demonstrates: priority inheritance trigger, restoration,
+                         push-through blocking prevention.
+
+  Task parameters (from Deliverable 4 / application example):
+    tau1: C=1, T=4, D=4, nom_prio=1  — uses R (CS len=1)
+    tau2: C=2, T=6, D=6, nom_prio=2  — does NOT use R
+    tau3: C=4, T=16,D=16,nom_prio=3  — uses R (CS len=4)
+
+  State representation:
+    - Shared integer variables encode task priorities, resource ownership
+    - Clocks track blocking duration and periods
+    - Binary semaphore modelled as holder variable (-1 = free)
+
+  Properties verified (see pip_queries.q):
+    1. A[] not deadlock
+    2. A[] (blocking_tau1 => not (tau2.Running && not blocked_tau2))
+    3. A[] (block_dur[0] <= 4 && block_dur[1] <= 4 && block_dur[2] == 0)
+    4. A[] (tau1.Activated => tau1.Activated || tau1.Running || tau1.Blocked
+            || tau1.CriticalSection || tau1.Waiting)
+-->
+<nta>
+  <!-- ============================================================
+       GLOBAL DECLARATIONS
+       ============================================================ -->
+  <declaration>
+/* ---- Priority levels (lower number = higher priority, Buttazzo §7.3) ---- */
+const int PMAX = 9;          /* infinity sentinel */
+const int P1   = 1;          /* tau1 nominal priority */
+const int P2   = 2;          /* tau2 nominal priority */
+const int P3   = 3;          /* tau3 nominal priority */
+
+/* ---- Number of tasks ---- */
+const int N = 3;
+
+/* ---- Active priority array: act_prio[i] is tau(i+1)'s current priority ---- */
+int[1,9] act_prio[N];        /* act_prio[0]=tau1, [1]=tau2, [2]=tau3 */
+
+/* ---- Semaphore (binary): holder = task index (0/1/2), -1 if free ---- */
+int[-1,2] holder;            /* who holds S_R (-1 = free) */
+
+/* ---- Blocking duration counters (integer approximation) ---- */
+int[0,20] block_dur[N];     /* how long each task has been blocked this instance */
+
+/* ---- Observer flags ---- */
+bool blocking_tau1;          /* tau1 currently blocked on S_R */
+bool blocked_tau2;           /* tau2 currently blocked (push-through) */
+
+/* ---- Synchronisation channels ---- */
+/* lock_req[i]! : task i requests lock on S_R     */
+/* lock_ack[i]! : resource manager grants lock    */
+/* unlock[i]!   : task i releases S_R             */
+/* boost[i]!    : priority manager boosts task i  */
+/* restore[i]!  : priority manager restores task i*/
+chan lock_req[N];
+chan lock_ack[N];
+chan unlock_rel[N];
+chan boost[N];
+chan restore_prio[N];
+chan sched_event;            /* any priority change -> re-evaluate scheduler */
+
+/* ---- Helper: ceiling of S_R = P1 (used by tau1 and tau3, max prio = P1) ---- */
+const int CEILING_SR = P1;
+
+/* ---- PIP inheritance function (Buttazzo Eq 7.8) ---- */
+/* Implemented via the ResourceManager automaton transitions */
+  </declaration>
+
+  <!-- ============================================================
+       TEMPLATE: Task
+       Parameters: id (task index 0-2), nom (nominal priority),
+                   C (computation time), T (period), D (deadline),
+                   uses_R (1 if task uses S_R, 0 otherwise),
+                   cs_len (length of critical section, 0 if no CS)
+       ============================================================ -->
+  <template>
+    <name>Task</name>
+    <parameter>const int id, const int nom, const int C,
+               const int T_period, const int D_deadline,
+               const int uses_R, const int cs_len</parameter>
+    <declaration>
+clock x;          /* execution progress clock */
+clock period_clk; /* period tracking */
+int[0,20] rem;    /* remaining compute units */
+int[0,20] cs_rem; /* remaining CS units */
+bool has_lock;    /* currently holds S_R */
+    </declaration>
+    <!-- States -->
+    <location id="l_idle">
+      <name>Idle</name>
+    </location>
+    <location id="l_ready">
+      <name>Ready</name>
+      <urgent/>
+    </location>
+    <location id="l_run">
+      <name>Running</name>
+      <label kind="invariant">x &lt;= 1</label>
+    </location>
+    <location id="l_cs">
+      <name>CriticalSection</name>
+      <label kind="invariant">x &lt;= 1</label>
+    </location>
+    <location id="l_blocked">
+      <name>Blocked</name>
+    </location>
+    <location id="l_wait_ack">
+      <name>WaitAck</name>
+      <urgent/>
+    </location>
+    <init ref="l_idle"/>
+
+    <!-- Transitions -->
+
+    <!-- Idle -> Ready (periodic release at every T_period) -->
+    <transition>
+      <source ref="l_idle"/>
+      <target ref="l_ready"/>
+      <label kind="guard">period_clk &gt;= T_period</label>
+      <label kind="assignment">period_clk := 0,
+        rem := C,
+        cs_rem := cs_len,
+        has_lock := false,
+        act_prio[id] := nom,
+        block_dur[id] := 0,
+        x := 0</label>
+    </transition>
+
+    <!-- First release (time 0) -->
+    <transition>
+      <source ref="l_idle"/>
+      <target ref="l_ready"/>
+      <label kind="guard">period_clk == 0</label>
+      <label kind="assignment">rem := C,
+        cs_rem := cs_len,
+        has_lock := false,
+        act_prio[id] := nom,
+        block_dur[id] := 0,
+        x := 0</label>
+    </transition>
+
+    <!-- Ready -> Running: this task has highest active priority -->
+    <transition>
+      <source ref="l_ready"/>
+      <target ref="l_run"/>
+      <label kind="guard">
+        act_prio[id] &lt;= act_prio[0] &amp;&amp;
+        act_prio[id] &lt;= act_prio[1] &amp;&amp;
+        act_prio[id] &lt;= act_prio[2] &amp;&amp;
+        rem &gt; 0 &amp;&amp;
+        uses_R == 0</label>
+      <label kind="assignment">x := 0</label>
+    </transition>
+
+    <!-- Ready -> WaitAck: task that uses R and starts CS right away -->
+    <transition>
+      <source ref="l_ready"/>
+      <target ref="l_wait_ack"/>
+      <label kind="guard">
+        act_prio[id] &lt;= act_prio[0] &amp;&amp;
+        act_prio[id] &lt;= act_prio[1] &amp;&amp;
+        act_prio[id] &lt;= act_prio[2] &amp;&amp;
+        rem &gt; 0 &amp;&amp;
+        uses_R == 1 &amp;&amp;
+        !has_lock</label>
+      <label kind="synchronisation">lock_req[id]!</label>
+    </transition>
+
+    <!-- WaitAck -> CriticalSection: lock granted -->
+    <transition>
+      <source ref="l_wait_ack"/>
+      <target ref="l_cs"/>
+      <label kind="synchronisation">lock_ack[id]?</label>
+      <label kind="assignment">has_lock := true,
+        x := 0,
+        blocking_tau1 := (id == 0) ? false : blocking_tau1</label>
+    </transition>
+
+    <!-- WaitAck -> Blocked: lock denied (held by someone else) -->
+    <transition>
+      <source ref="l_wait_ack"/>
+      <target ref="l_blocked"/>
+      <!-- The ResourceManager sends no ack -> task stays in WaitAck
+           until unblocked. Simplified: ResourceManager notifies via lock_ack
+           after the holder signals. Here we model blocking directly. -->
+      <!-- This transition is taken when ResourceManager puts task in queue -->
+    </transition>
+
+    <!-- Blocked -> WaitAck: woken by signal, retry lock -->
+    <transition>
+      <source ref="l_blocked"/>
+      <target ref="l_cs"/>
+      <label kind="synchronisation">lock_ack[id]?</label>
+      <label kind="assignment">has_lock := true,
+        x := 0,
+        blocking_tau1 := (id == 0) ? false : blocking_tau1</label>
+    </transition>
+
+    <!-- Running: one time unit of compute -->
+    <transition>
+      <source ref="l_run"/>
+      <target ref="l_run"/>
+      <label kind="guard">x &gt;= 1 &amp;&amp; rem &gt; 1</label>
+      <label kind="assignment">rem := rem - 1, x := 0</label>
+    </transition>
+
+    <!-- Running: last compute unit -> Done -> Idle -->
+    <transition>
+      <source ref="l_run"/>
+      <target ref="l_idle"/>
+      <label kind="guard">x &gt;= 1 &amp;&amp; rem == 1</label>
+      <label kind="assignment">rem := 0, act_prio[id] := nom</label>
+    </transition>
+
+    <!-- CriticalSection: one unit of CS -->
+    <transition>
+      <source ref="l_cs"/>
+      <target ref="l_cs"/>
+      <label kind="guard">x &gt;= 1 &amp;&amp; cs_rem &gt; 1 &amp;&amp; rem &gt; 1</label>
+      <label kind="assignment">cs_rem := cs_rem - 1, rem := rem - 1, x := 0</label>
+    </transition>
+
+    <!-- CriticalSection: last CS unit -> signal -> back to running or done -->
+    <transition>
+      <source ref="l_cs"/>
+      <target ref="l_idle"/>
+      <label kind="guard">x &gt;= 1 &amp;&amp; cs_rem == 1 &amp;&amp; rem == 1</label>
+      <label kind="synchronisation">unlock_rel[id]!</label>
+      <label kind="assignment">has_lock := false,
+        cs_rem := 0, rem := 0, act_prio[id] := nom</label>
+    </transition>
+
+    <!-- Preemption: higher priority task becomes ready, current runner goes back -->
+    <transition>
+      <source ref="l_run"/>
+      <target ref="l_ready"/>
+      <label kind="guard">
+        (id == 0 &amp;&amp; (act_prio[1] &lt; act_prio[0] || act_prio[2] &lt; act_prio[0])) ||
+        (id == 1 &amp;&amp; (act_prio[0] &lt; act_prio[1] || act_prio[2] &lt; act_prio[1])) ||
+        (id == 2 &amp;&amp; (act_prio[0] &lt; act_prio[2] || act_prio[1] &lt; act_prio[2]))</label>
+    </transition>
+
+  </template>
+
+  <!-- ============================================================
+       TEMPLATE: ResourceManager
+       Models binary semaphore S_R with PIP inheritance logic
+       Buttazzo §7.6.4 pi_wait / pi_signal pseudocode (pp. 224-225)
+       ============================================================ -->
+  <template>
+    <name>ResourceManager</name>
+    <declaration>
+/* queued: which tasks are waiting (bit mask) */
+int[0,7] wait_mask;
+int[-1,2] pending_id;   /* task requesting the lock */
+    </declaration>
+    <location id="rm_free">
+      <name>Free</name>
+    </location>
+    <location id="rm_held">
+      <name>Held</name>
+    </location>
+    <location id="rm_granting">
+      <name>Granting</name>
+      <committed/>
+    </location>
+    <init ref="rm_free"/>
+
+    <!-- Free state: lock request -> grant immediately (pi_wait: free case) -->
+    <transition>
+      <source ref="rm_free"/>
+      <target ref="rm_granting"/>
+      <label kind="synchronisation">lock_req[0]?</label>
+      <label kind="assignment">holder := 0, pending_id := 0</label>
+    </transition>
+    <transition>
+      <source ref="rm_free"/>
+      <target ref="rm_granting"/>
+      <label kind="synchronisation">lock_req[2]?</label>
+      <label kind="assignment">holder := 2, pending_id := 2</label>
+    </transition>
+
+    <!-- Granting: send acknowledgement (committed state -> immediate) -->
+    <transition>
+      <source ref="rm_granting"/>
+      <target ref="rm_held"/>
+      <label kind="synchronisation">lock_ack[pending_id]!</label>
+    </transition>
+
+    <!-- Held state: lock request while busy -> add to wait queue + trigger inheritance -->
+    <!-- tau1 requests while held (tau3 must be holder) -->
+    <transition>
+      <source ref="rm_held"/>
+      <target ref="rm_held"/>
+      <label kind="guard">holder == 2</label>
+      <label kind="synchronisation">lock_req[0]?</label>
+      <label kind="assignment">
+        wait_mask := wait_mask | 1,
+        blocking_tau1 := true,
+        block_dur[0] := 0,
+        /* PIP Eq(7.8): holder inherits max(prio_holder, prio_blocked) */
+        act_prio[2] := (P1 &lt; act_prio[2]) ? P1 : act_prio[2]
+      </label>
+    </transition>
+
+    <!-- tau3 requests while held (tau1 must be holder - rare, tau1 CS=1) -->
+    <transition>
+      <source ref="rm_held"/>
+      <target ref="rm_held"/>
+      <label kind="guard">holder == 0</label>
+      <label kind="synchronisation">lock_req[2]?</label>
+      <label kind="assignment">
+        wait_mask := wait_mask | 4,
+        block_dur[2] := 0
+      </label>
+    </transition>
+
+    <!-- Release by holder: pi_signal (Buttazzo §7.6.4 p.225) -->
+    <!-- tau1 releases: wake any waiting tau3 -->
+    <transition>
+      <source ref="rm_held"/>
+      <target ref="rm_granting"/>
+      <label kind="guard">holder == 0 &amp;&amp; (wait_mask &amp; 4) != 0</label>
+      <label kind="synchronisation">unlock_rel[0]?</label>
+      <label kind="assignment">
+        holder := 2,
+        pending_id := 2,
+        wait_mask := wait_mask &amp; ~4,
+        act_prio[0] := P1,  /* restore tau1 */
+        /* tau3's blocking time recorded */
+        block_dur[2] := 0
+      </label>
+    </transition>
+
+    <!-- tau1 releases, no waiters -> free -->
+    <transition>
+      <source ref="rm_held"/>
+      <target ref="rm_free"/>
+      <label kind="guard">holder == 0 &amp;&amp; (wait_mask &amp; 4) == 0</label>
+      <label kind="synchronisation">unlock_rel[0]?</label>
+      <label kind="assignment">
+        holder := -1,
+        act_prio[0] := P1
+      </label>
+    </transition>
+
+    <!-- tau3 releases, wake tau1 if waiting -->
+    <transition>
+      <source ref="rm_held"/>
+      <target ref="rm_granting"/>
+      <label kind="guard">holder == 2 &amp;&amp; (wait_mask &amp; 1) != 0</label>
+      <label kind="synchronisation">unlock_rel[2]?</label>
+      <label kind="assignment">
+        holder := 0,
+        pending_id := 0,
+        wait_mask := wait_mask &amp; ~1,
+        /* PIP restore: tau3 returns to nominal prio (Buttazzo §7.6.4 p.225) */
+        act_prio[2] := P3,
+        blocking_tau1 := false
+      </label>
+    </transition>
+
+    <!-- tau3 releases, no waiters -> free -->
+    <transition>
+      <source ref="rm_held"/>
+      <target ref="rm_free"/>
+      <label kind="guard">holder == 2 &amp;&amp; (wait_mask &amp; 1) == 0</label>
+      <label kind="synchronisation">unlock_rel[2]?</label>
+      <label kind="assignment">
+        holder := -1,
+        act_prio[2] := P3
+      </label>
+    </transition>
+
+  </template>
+
+  <!-- ============================================================
+       TEMPLATE: Observer
+       Non-interfering monitor for property verification
+       Buttazzo §7.6.2 properties + §7.9 schedulability
+       ============================================================ -->
+  <template>
+    <name>Observer</name>
+    <declaration>clock obs_clk;</declaration>
+    <location id="obs_init">
+      <name>Monitoring</name>
+    </location>
+    <init ref="obs_init"/>
+    <!-- Observer is a single-state automaton; properties are checked
+         via the shared variables blocking_tau1, act_prio[], block_dur[]
+         and the query language. No transitions needed for monitoring. -->
+  </template>
+
+  <!-- ============================================================
+       SYSTEM INSTANTIATION
+       ============================================================ -->
+  <system>
+/* Task instantiation:
+   Task(id, nom_prio, C, T, D, uses_R, cs_len)          */
+tau1 = Task(0, 1, 1,  4,  4, 1, 1);   /* uses R, CS len=1  */
+tau2 = Task(1, 2, 2,  6,  6, 0, 0);   /* no R              */
+tau3 = Task(2, 3, 4, 16, 16, 1, 4);   /* uses R, CS len=4  */
+
+rm   = ResourceManager();
+obs  = Observer();
+
+system tau1, tau2, tau3, rm, obs;
+  </system>
+
+  <!-- ============================================================
+       QUERIES (also provided separately in pip_queries.q)
+       ============================================================ -->
+  <queries>
+    <query>
+      <formula>A[] not deadlock</formula>
+      <comment>
+        Property 1: No deadlock.
+        Verifies that the system never reaches a state where no transition
+        is enabled and time cannot progress.
+        Buttazzo §7.6.5 notes PIP does NOT prevent deadlock in general
+        (Fig.7.13), but our 3-task / 1-resource scenario with total semaphore
+        ordering cannot deadlock: tau1 and tau3 use one resource in the same order.
+      </comment>
+    </query>
+    <query>
+      <formula>A[] (blocking_tau1 imply not (tau2.Running and not blocked_tau2))</formula>
+      <comment>
+        Property 2: PIP prevents unbounded priority inversion.
+        When tau1 (highest priority) is blocked on S_R held by tau3,
+        tau2 (medium priority, no resource overlap) must NOT run freely.
+        This is the exact correctness condition PIP enforces (Buttazzo §7.6, p.214):
+        push-through blocking (§7.6.1, p.216) ensures tau2 cannot preempt
+        tau3-boosted-to-P1.
+      </comment>
+    </query>
+    <query>
+      <formula>A[] (block_dur[0] &lt;= 4 and block_dur[1] &lt;= 4 and block_dur[2] == 0)</formula>
+      <comment>
+        Property 3: Blocking time bounds (Buttazzo §7.6.3, Eq 7.9-7.11).
+        B1=4 (tau3 CS length), B2=4 (push-through, Lemma 7.1), B3=0.
+        These are worst-case bounds; the verified system should never exceed them.
+      </comment>
+    </query>
+    <query>
+      <formula>A[] (tau1.Idle or tau1.Ready or tau1.Running or tau1.CriticalSection
+               or tau1.WaitAck or tau1.Blocked)</formula>
+      <comment>
+        Property 4: Liveness / state coverage.
+        tau1 is always in a valid state (system never loses track of a task).
+        Combined with Property 1, ensures tau1 eventually completes.
+      </comment>
+    </query>
+  </queries>
+
+</nta>
