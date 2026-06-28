@@ -14,4 +14,4 @@ A seminar on Priority Interhitance Protocol (Ressource Access Protocols) by Nnae
 - [AI Protocol](https://github.com/Emeka-NE/RTS_Seminar/tree/main/ai_protocol): AI usage protocol files for all four milestones. Each milestone folder contains three files per the seminar template schema.
 - [Implementation](https://github.com/Emeka-NE/RTS_Seminar/tree/main/implementation): The full implementation deliverable: C++17 and UPPAAL application example.
 - [Milestones](https://github.com/Emeka-NE/RTS_Seminar/tree/main/milestones): Four milestone deliverables for my given seminar topic
-- [Presentation](): Powerpoint presentation slides based on my [final paper](https://github.com/Emeka-NE/RTS_Seminar/tree/main/milestones/M4) in Milestone 4
+- [Presentation](https://github.com/Emeka-NE/RTS_Seminar/tree/main/presentation): Powerpoint presentation slides based on my [final paper](https://github.com/Emeka-NE/RTS_Seminar/tree/main/milestones/M4) in Milestone 4
